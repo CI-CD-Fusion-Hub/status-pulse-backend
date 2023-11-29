@@ -71,7 +71,7 @@ class EndpointDAO:
             result = await self.db.execute(select(model.Endpoints).where(model.Endpoints.id == endpoint_id))
             endpoint = result.scalars().first()
 
-            if endpoint.log_table:
+            if endpoint and endpoint.log_table:
                 log_table_name = f"log.{endpoint.log_table}"
                 latest_log_result = await self.db.execute(
                     select(text('status'))
@@ -83,6 +83,7 @@ class EndpointDAO:
                 endpoint.status = latest_log
 
             return endpoint
+
     async def update(self, endpoint_id: int, updated_data) -> model.Endpoints:
         """Update an existing endpoint."""
         async with self.db:

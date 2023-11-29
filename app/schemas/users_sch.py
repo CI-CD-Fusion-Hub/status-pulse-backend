@@ -82,6 +82,32 @@ class UpdateUserProfile(BaseModel):
         return ValidatorUtils.validate_password(password, info)
 
 
+class UpdateUserAdmin(UpdateUserProfile):
+    status: Optional[str] = None
+    access_level: Optional[str] = None
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "first_name": "asd",
+                "last_name": "CH",
+                "email": "test1@gmail.com",
+                "password": "asdf@asdf",
+                "confirm_password": "asdf@asdf",
+                "status": "inactive",
+                "access_level": "Admin"
+            }
+        }
+
+    @field_validator("status")
+    def status_match(cls, status):
+        return ValidatorUtils.validate_status(status)
+
+    @field_validator("access_level")
+    def access_level_match(cls, access_level):
+        return ValidatorUtils.validate_access_level(access_level)
+
+
 class UserBaseOut(BaseModel):
     id: int
     first_name: str

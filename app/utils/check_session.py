@@ -3,9 +3,9 @@ from functools import wraps
 from starlette.requests import Request
 from app.config.config import Settings
 from app.daos.users_dao import UserDAO
-from app.utils.enums import UserStatus, SessionAttributes
+from app.utils.enums import UserStatus, SessionAttributes, AccessLevel
 from app.utils.logger import Logger
-from app.utils.response import unauthorized
+from app.utils.response import unauthorized, forbidden
 
 LOGGER = Logger().start_logger()
 config = Settings()
@@ -34,6 +34,17 @@ def auth_required(function_to_protect):
         request.session[SessionAttributes.USER_ID.value] = user.id
         request.session[SessionAttributes.USER_ENDPOINTS.value] = endpoints
         return await function_to_protect(request, *args, **kwargs)
+
+    return wrapper
+
+
+def admin_access_required(function_to_protect):
+    @wraps(function_to_protect)
+    async def wrapper(request: Request, *args, **kwargs):
+        if request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value) == AccessLevel.ADMIN.value:
+            return await function_to_protect(request, *args, **kwargs)
+
+        return forbidden()
 
     return wrapper
 
