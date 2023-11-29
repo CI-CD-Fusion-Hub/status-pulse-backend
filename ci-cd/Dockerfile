@@ -1,7 +1,7 @@
 FROM python:3.11-alpine
 
-WORKDIR /ci-cd-fusion-hub-backend
-COPY . /ci-cd-fusion-hub-backend
+WORKDIR /status-pulse-backend
+COPY . /status-pulse-backend
 
 # Install OS Required packages
 RUN apk update && apk upgrade && apk add postgresql-dev gcc python3-dev musl-dev linux-headers

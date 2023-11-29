@@ -1,0 +1,32 @@
+name: Backend Build
+
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  push:
+    branches: [main]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build-deploy:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v2
+      
+      - name: Docker Login
+        env:
+          DOCKER_USER: ${{ secrets.DOCKER_HUB_USERNAME }}
+          DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_PASSWORD }}
+        run: |
+          docker login -u $DOCKER_USER -p $DOCKER_PASSWORD
+      - name: Build Docker image
+        run: docker build -t statuspulse/backend:$(cat ci-cd/VERSION) -f ci-cd/Dockerfile .
+      - name: Deploy to Docker Hub
+        run: docker push statuspulse/backend:$(cat ci-cd/VERSION)
