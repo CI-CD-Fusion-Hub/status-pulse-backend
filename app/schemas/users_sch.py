@@ -88,7 +88,7 @@ class UserBaseOut(BaseModel):
     last_name: str
     email: str
     status: str
-    created_ts: str
+    created_at: str
     access_level: str
 
 
