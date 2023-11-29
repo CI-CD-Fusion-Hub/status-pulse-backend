@@ -2,6 +2,7 @@ from typing import Optional
 
 from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.sql.ddl import CreateTable
 
@@ -21,6 +22,8 @@ class Users(Base):
     created_at = Column(TIMESTAMP, default=func.now())
     status = Column(String)
     access_level = Column(String)
+
+    endpoints = relationship("UserEndpoints", back_populates="user")
 
     def as_dict(self):
         return {
@@ -74,6 +77,8 @@ class Endpoints(Base):
 
     status: Optional[str] = None
 
+    users = relationship("UserEndpoints", back_populates="endpoint")
+
     def as_dict(self):
         return {
             'id': self.id,
@@ -89,6 +94,27 @@ class Endpoints(Base):
             'type': self.type,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'status': self.status
+        }
+
+
+class UserEndpoints(Base):
+    __tablename__ = "user_endpoints"
+    __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
+
+    user_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.users.id", ondelete='CASCADE'),
+                     primary_key=True)
+    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id", ondelete='CASCADE'),
+                         primary_key=True)
+    created_ts = Column(TIMESTAMP, default=func.now())
+
+    user = relationship("Users", back_populates="endpoints")
+    endpoint = relationship("Endpoints", back_populates="users")
+
+    def as_dict(self):
+        return {
+            'user_id': self.user_id,
+            'endpoint_id': self.endpoint_id,
+            'created_ts': self.created_ts.isoformat()
         }
 
 

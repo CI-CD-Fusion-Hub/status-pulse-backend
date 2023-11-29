@@ -3,6 +3,7 @@ from typing import List
 from psycopg2 import errorcodes
 from sqlalchemy import select, delete, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 from app.models import db_models as model
 from app.schemas.users_sch import CreateUserDB
@@ -34,6 +35,20 @@ class UserDAO:
         """Fetch a specific user by its Email."""
         async with self.db:
             result = await self.db.execute(select(model.Users).where(model.Users.email == email))
+            return result.scalars().first()
+
+    async def get_detailed_user_info_by_email(self, email: str):
+        """Fetch a user with their endpoints access."""
+        async with self.db:
+            stmt = (
+                select(model.Users)
+                .options(
+                    joinedload(model.Users.endpoints)
+                    .joinedload(model.UserEndpoints.endpoint)
+                )
+                .where(model.Users.email == email)
+            )
+            result = await self.db.execute(stmt)
             return result.scalars().first()
 
     async def create(self, user_data: CreateUserDB) -> model.Users:

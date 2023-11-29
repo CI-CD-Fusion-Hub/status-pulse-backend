@@ -6,6 +6,7 @@ from app.daos.endpoints_dao import EndpointDAO, DuplicateEndpointError
 from app.daos.log_table_dao import LogTableDAO
 from app.models.db_models import create_log_table
 from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, EndpointsOut
+from app.utils.enums import SessionAttributes, AccessLevel
 from app.utils.logger import Logger
 from app.utils.response import ok, error
 
@@ -28,15 +29,33 @@ class EndpointService:
         return table_name
 
     async def get_all(self, request: Request):
-        endpoints = await self.endpoint_dao.get_all_with_latest_log_status()
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+
+        if user_access_level != AccessLevel.ADMIN.value:
+            LOGGER.info("Fetching endpoints based on user-specific access.")
+            user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+            endpoints = await self.endpoint_dao.get_all_with_latest_log_status(user_endpoints)
+        else:
+            LOGGER.info("Fetching all endpoints for admin user.")
+            endpoints = await self.endpoint_dao.get_all_with_latest_log_status()
+
         if not endpoints:
             LOGGER.info("No endpoints found in the database.")
+            return ok(message="No endpoints found.")
 
         LOGGER.info(f"Retrieved {len(endpoints)} endpoints.")
         return ok(message="Successfully provided all endpoints.",
                   data=[BaseEndpointsOut.model_validate(endpoint.as_dict()) for endpoint in endpoints])
 
     async def get_by_id(self, request: Request, endpoint_id: int):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
         endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
@@ -47,7 +66,15 @@ class EndpointService:
         return ok(message="Successfully provided endpoint.",
                   data=BaseEndpointsOut.model_validate(endpoint.as_dict()))
 
-    async def get_status_graph_by_id(self, request, endpoint_id):
+    async def get_status_graph_by_id(self, request: Request, endpoint_id: int):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
         endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
@@ -64,6 +91,14 @@ class EndpointService:
                   data=endpoint_data.logs)
 
     async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
         endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
@@ -102,7 +137,6 @@ class EndpointService:
 
                 hourly_logs.append(hourly_log)
 
-            print(len(hourly_logs))
         return ok(message="Successfully provided status graph for endpoint.",
                   data=hourly_logs)
 
@@ -123,6 +157,8 @@ class EndpointService:
                 log_table=log_table)
 
             endpoint = await self.endpoint_dao.create(db_data)
+            await self.endpoint_dao.assign_endpoint_to_user(endpoint.id,
+                                                            request.session.get(SessionAttributes.USER_ID.value))
             await create_log_table(log_table)
 
             return ok(
@@ -134,6 +170,14 @@ class EndpointService:
             return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
 
     async def update_endpoint(self, request: Request, endpoint_id: int, endpoint_data: UpdateEndpoint):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
         endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
@@ -149,6 +193,14 @@ class EndpointService:
         return ok(message="Successfully updated endpoint.", data=BaseEndpointsOut.model_validate(endpoint.as_dict()))
 
     async def delete_endpoint(self, request: Request, endpoint_id: int):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
         endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
         if not endpoint:
             LOGGER.warning(f"Attempted to delete a non-existent endpoint with ID {endpoint_id}.")

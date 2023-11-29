@@ -24,13 +24,22 @@ class EndpointDAO:
             result = await self.db.execute(select(model.Endpoints).order_by(model.Endpoints.created_at))
             return result.scalars().all()
 
-    async def get_all_with_latest_log_status(self):
+    async def get_all_by_ids(self, ids: List[int]) -> List[model.Endpoints]:
+        """Fetch all endpoints by ids."""
+        async with self.db:
+            result = await self.db.execute(select(model.Endpoints).order_by(model.Endpoints.created_at)
+                                           .where(model.Endpoints.id.in_(ids)))
+            return result.scalars().all()
+
+    async def get_all_with_latest_log_status(self, ids: List[int] = None):
         """Fetch all endpoints with their latest log status."""
         async with self.db:
             try:
                 # Fetch all endpoints
-                result = await self.db.execute(select(model.Endpoints).order_by(model.Endpoints.created_at))
-                endpoints = result.scalars().all()
+                if ids:
+                    endpoints = await self.get_all_by_ids(ids)
+                else:
+                    endpoints = await self.get_all()
 
                 # Fetch the latest log status for each endpoint
                 for endpoint in endpoints:
@@ -113,6 +122,26 @@ class EndpointDAO:
             if e.orig.pgcode == errorcodes.UNIQUE_VIOLATION:  # PostgresSQL unique violation error code
                 await self.db.rollback()
                 raise DuplicateEndpointError("Endpoint with that email already exists.")
+            else:
+                # Handle other types of IntegrityError (foreign key, etc.) as needed
+                await self.db.rollback()
+                raise e
+
+    async def assign_endpoint_to_user(self, endpoint_id: int, user_id: int):
+        user_endpoint = model.UserEndpoints(
+            user_id=user_id,
+            endpoint_id=endpoint_id
+        )
+        try:
+            async with self.db:
+                self.db.add(user_endpoint)
+                await self.db.commit()
+                return user_endpoint
+        except IntegrityError as e:
+            # Check the specific PostgresSQL error code (pgcode)
+            if e.orig.pgcode == errorcodes.UNIQUE_VIOLATION:  # PostgresSQL unique violation error code
+                await self.db.rollback()
+                raise DuplicateEndpointError("User already have access to this endpoint.")
             else:
                 # Handle other types of IntegrityError (foreign key, etc.) as needed
                 await self.db.rollback()

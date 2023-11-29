@@ -29,3 +29,4 @@ class SessionAttributes(Enum):
     USER_NAME = 'user_name'
     USER_ACCESS_LEVEL = 'user_access_level'
     USER_INFO = 'user_info'
+    USER_ENDPOINTS = 'user_endpoints'

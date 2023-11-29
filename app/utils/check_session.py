@@ -19,16 +19,20 @@ def auth_required(function_to_protect):
             return unauthorized()
 
         user_dao = UserDAO()
-        user = await user_dao.get_by_email(email)
+        user = await user_dao.get_detailed_user_info_by_email(email)
+
         if not user:
             return unauthorized()
 
         if user.status != UserStatus.ACTIVE.value:
             return unauthorized()
 
+        endpoints = [endpoint.endpoint.id for endpoint in user.endpoints]
+
         request.session[SessionAttributes.USER_INFO.value] = user.as_dict()
         request.session[SessionAttributes.USER_ACCESS_LEVEL.value] = user.access_level
         request.session[SessionAttributes.USER_ID.value] = user.id
+        request.session[SessionAttributes.USER_ENDPOINTS.value] = endpoints
         return await function_to_protect(request, *args, **kwargs)
 
     return wrapper
