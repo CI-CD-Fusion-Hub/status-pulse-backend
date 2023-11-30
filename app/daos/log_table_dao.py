@@ -32,7 +32,8 @@ class LogTableDAO:
     async def select_all_from_log_table(self, table_name: str):
         """Select all records from a specific log table."""
         sanitized_table_name = self._sanitize_table_name(table_name)
-        select_query = f"SELECT * FROM {DatabaseSchemas.LOG_SCHEMA.value}.{sanitized_table_name};"
+        select_query = f"SELECT * FROM {DatabaseSchemas.LOG_SCHEMA.value}.{sanitized_table_name} " \
+                       f"ORDER BY created_at ASC;"
 
         async with self.db:
             try:
@@ -53,7 +54,7 @@ class LogTableDAO:
 
         select_query = (
             f"SELECT * FROM {DatabaseSchemas.LOG_SCHEMA.value}.{sanitized_table_name} "
-            f"WHERE created_at >= '{formatted_timestamp}';"
+            f"WHERE created_at >= '{formatted_timestamp}' ORDER BY created_at ASC;"
         )
 
         async with self.db:

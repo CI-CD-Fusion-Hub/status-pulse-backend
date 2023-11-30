@@ -1,7 +1,10 @@
 import uuid
+import jwt
 from datetime import timedelta, datetime
 
 from fastapi import Request, status
+from jwt import ExpiredSignatureError, InvalidTokenError
+
 from app.daos.endpoints_dao import EndpointDAO, DuplicateEndpointError
 from app.daos.log_table_dao import LogTableDAO
 from app.models.db_models import create_log_table
@@ -84,7 +87,7 @@ class EndpointService:
         endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())
 
         if endpoint.log_table:
-            log_records = await self.log_table_dao.select_all_from_log_table(endpoint.log_table)
+            log_records = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, 24)
             endpoint_data.logs = [record._asdict() for record in log_records]
 
         return ok(message="Successfully provided status graph for endpoint.",
@@ -213,3 +216,60 @@ class EndpointService:
         await self.log_table_dao.delete_log_table(endpoint.log_table)
         LOGGER.info(f"Endpoint with ID {endpoint_id} has been successfully deleted.")
         return ok(message="Endpoint has been successfully deleted.")
+
+    async def share_endpoint(self, request, endpoint_id: int):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+
+        user_id = request.session.get(SessionAttributes.USER_ID.value)
+        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+            LOGGER.warning(f"User trying to share ndpoint with ID {endpoint_id}.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
+        url_with_token = self._generate_share_token(request, endpoint_id)
+        return ok(message="Share endpoint link been successfully provided.", data=url_with_token)
+
+    @classmethod
+    def _generate_share_token(cls, request: Request, endpoint_id: int):
+        # change with env
+        secret_key = "your_secret_key"
+
+        # Get it from request
+        expiration_time = datetime.now() + timedelta(hours=1)
+
+        token = jwt.encode(
+            {
+                'exp': expiration_time,
+                'endpoint_id': endpoint_id
+            },
+            secret_key, algorithm='HS256')
+
+        token_str = token.decode('utf-8') if isinstance(token, bytes) else token
+        url_with_token = f"{request.url}?token={token_str}"
+
+        return url_with_token
+
+    @classmethod
+    def _validate_share_token(cls, token: str):
+        secret_key = "your_secret_key"
+
+        try:
+            decoded_token = jwt.decode(token, secret_key, algorithm='HS256')
+
+            if datetime.fromtimestamp(decoded_token['exp']) < datetime.now():
+                LOGGER.warning("Token has expired")
+                return "Token has expired"
+
+            return "Token is valid"
+
+        except ExpiredSignatureError:
+            LOGGER.warning("Token has expired")
+            return "Token has expired"
+        except InvalidTokenError:
+            LOGGER.warning("Invalid token")
+            return "Invalid token"
+
+    def validate_shared_endpoint(self, request, endpoint_id):
+        pass

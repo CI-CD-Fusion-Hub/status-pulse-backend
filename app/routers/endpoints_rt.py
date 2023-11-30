@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 
 from app.schemas.endpoints_sch import CreateEndpoint, UpdateEndpoint, BaseEndpointsOut, EndpointsOut
 from app.schemas.response_sch import Response
@@ -40,6 +40,21 @@ async def get_status_graph_by_id(request: Request, endpoint_id: int,
 async def get_status_graph_by_id(request: Request, endpoint_id: int,
                                  endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
     return await endpoint_service.get_uptime_graph_by_id(request, endpoint_id)
+
+
+# @router.post("/endpoints/{endpoint_id}/share", tags=["endpoints"])
+# @auth_required
+# async def share_endpoint(request: Request, endpoint_id: int,
+#                          endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
+#     return await endpoint_service.share_endpoint(request, endpoint_id)
+#
+#
+# @router.get("/endpoints/{endpoint_id}/share", tags=["endpoints"])
+# @auth_required
+# async def validate_shared_endpoint(request: Request, endpoint_id: int,
+#                                    token: str = Query(1, gt=0),
+#                                    endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
+#     return await endpoint_service.validate_shared_endpoint(request, endpoint_id)
 
 
 @router.post("/endpoints", tags=["endpoints"])
