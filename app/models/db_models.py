@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey
+from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -114,6 +114,29 @@ class UserEndpoints(Base):
         return {
             'user_id': self.user_id,
             'endpoint_id': self.endpoint_id,
+            'created_ts': self.created_ts.isoformat()
+        }
+
+
+class ShareTokens(Base):
+    __tablename__ = "share_tokens"
+    __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.users.id", ondelete='CASCADE'))
+    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id", ondelete='CASCADE'))
+    used = Column(Boolean)
+    token = Column(String)
+    created_ts = Column(TIMESTAMP, default=func.now())
+
+    user = relationship("Users")
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'endpoint_id': self.endpoint_id,
+            'used': self.used,
             'created_ts': self.created_ts.isoformat()
         }
 

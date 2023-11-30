@@ -1,15 +1,18 @@
 import uuid
 import jwt
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 
 from fastapi import Request, status
 from jwt import ExpiredSignatureError, InvalidTokenError
 
 from app.daos.endpoints_dao import EndpointDAO, DuplicateEndpointError
 from app.daos.log_table_dao import LogTableDAO
+from app.daos.shared_tokens_dao import SharedTokenDAO
 from app.models.db_models import create_log_table
-from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, EndpointsOut
-from app.utils.enums import SessionAttributes, AccessLevel
+from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, \
+    EndpointsOut, EndpointLogs, BaseEndpointLogs
+from app.schemas.shared_tokens_sch import CreateToken, CreateTokenBody
+from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus
 from app.utils.logger import Logger
 from app.utils.response import ok, error
 
@@ -20,6 +23,7 @@ class EndpointService:
     def __init__(self):
         self.endpoint_dao = EndpointDAO()
         self.log_table_dao = LogTableDAO()
+        self.shared_token_dao = SharedTokenDAO()
 
     @classmethod
     def generate_table_name(cls):
@@ -44,7 +48,7 @@ class EndpointService:
 
         if not endpoints:
             LOGGER.info("No endpoints found in the database.")
-            return ok(message="No endpoints found.")
+            return ok(message="No endpoints found.", data=[])
 
         LOGGER.info(f"Retrieved {len(endpoints)} endpoints.")
         return ok(message="Successfully provided all endpoints.",
@@ -88,12 +92,23 @@ class EndpointService:
 
         if endpoint.log_table:
             log_records = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, 24)
-            endpoint_data.logs = [record._asdict() for record in log_records]
+            updated_logs = [
+                EndpointLogs(
+                    id=log.id,
+                    endpoint_id=log.endpoint_id,
+                    response=log.response,
+                    response_time=log.response_time,
+                    status=log.status,
+                    created_at=int(log.created_at.replace(tzinfo=timezone.utc).timestamp())
+                ) for log in log_records
+            ]
+
+            endpoint_data.logs = [record for record in updated_logs]
 
         return ok(message="Successfully provided status graph for endpoint.",
                   data=endpoint_data.logs)
 
-    async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int):
+    async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 72):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
         user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
 
@@ -109,7 +124,6 @@ class EndpointService:
                          status_code=status.HTTP_404_NOT_FOUND)
 
         hourly_logs = []
-        hours = 72
 
         if endpoint.log_table:
             logs = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, hours)
@@ -128,15 +142,27 @@ class EndpointService:
                 logs_current_hour = [log._asdict() for log in logs
                                      if current_hour_start <= log._asdict()['created_at'] < next_hour_start]
 
-                error_log = next((log for log in logs_current_hour if log['status'] != 'ok'), None)
+                error_log = [log for log in logs_current_hour if log['status'] != 'healthy']
 
-                if error_log:
-                    hourly_log = error_log
+                if len(error_log) >= 3:
+                    hourly_log = BaseEndpointLogs(
+                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at']
+                                 .replace(tzinfo=timezone.utc).timestamp()),
+                        status=EndpointStatus.DEGRADED.value)
+                elif 3 > len(error_log) > 0:
+                    hourly_log = BaseEndpointLogs(
+                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at']
+                                 .replace(tzinfo=timezone.utc).timestamp()),
+                        status=EndpointStatus.UNHEALTHY.value)
                 elif logs_current_hour:
-                    hourly_log = max(logs_current_hour, key=lambda log: log['created_at'])
+                    hourly_log = BaseEndpointLogs(
+                        created_at=int(max(logs_current_hour, key=lambda log: log['created_at'])['created_at']
+                                 .replace(tzinfo=timezone.utc).timestamp()),
+                        status=EndpointStatus.HEALTHY.value)
                 else:
-                    hourly_log = {"hour": current_hour_start.strftime("%Y-%m-%d %H:%M:%S"), "status": "nodata",
-                                  "details": "No logs for this hour"}
+                    hourly_log = BaseEndpointLogs(
+                        created_at=int(current_hour_start.replace(tzinfo=timezone.utc).timestamp()),
+                        status=EndpointStatus.NODATA.value)
 
                 hourly_logs.append(hourly_log)
 
@@ -217,7 +243,7 @@ class EndpointService:
         LOGGER.info(f"Endpoint with ID {endpoint_id} has been successfully deleted.")
         return ok(message="Endpoint has been successfully deleted.")
 
-    async def share_endpoint(self, request, endpoint_id: int):
+    async def share_endpoint(self, request, endpoint_id: int, exp_time: int):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
 
         user_id = request.session.get(SessionAttributes.USER_ID.value)
@@ -228,48 +254,79 @@ class EndpointService:
             return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
                          status_code=status.HTTP_404_NOT_FOUND)
 
-        url_with_token = self._generate_share_token(request, endpoint_id)
-        return ok(message="Share endpoint link been successfully provided.", data=url_with_token)
+        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
+        if not endpoint:
+            LOGGER.warning(f"Attempted to delete a non-existent endpoint with ID {endpoint_id}.")
+            return error(
+                message=f"Endpoint with ID {endpoint_id} does not exist.",
+                status_code=status.HTTP_404_NOT_FOUND
+            )
+
+        token = self._generate_share_token(endpoint_id, exp_time)
+        await self.shared_token_dao.create(
+            CreateToken(user_id=user_id, token=token, endpoint_id=endpoint_id, used=False))
+        return ok(message="Share token is generated.", data=token)
 
     @classmethod
-    def _generate_share_token(cls, request: Request, endpoint_id: int):
-        # change with env
+    def _generate_share_token(cls, endpoint_id: int, minutes: int):
         secret_key = "your_secret_key"
-
-        # Get it from request
-        expiration_time = datetime.now() + timedelta(hours=1)
+        expiration_time = datetime.now() + timedelta(minutes=minutes)
 
         token = jwt.encode(
             {
                 'exp': expiration_time,
-                'endpoint_id': endpoint_id
+                'endpoint_id': endpoint_id,
+                'one_time': True
             },
             secret_key, algorithm='HS256')
 
         token_str = token.decode('utf-8') if isinstance(token, bytes) else token
-        url_with_token = f"{request.url}?token={token_str}"
+        return token_str
 
-        return url_with_token
-
-    @classmethod
-    def _validate_share_token(cls, token: str):
+    async def _validate_share_token(self, request: Request, token: str):
         secret_key = "your_secret_key"
-
         try:
-            decoded_token = jwt.decode(token, secret_key, algorithm='HS256')
+            token_db = await self.shared_token_dao.get_by_token(token)
+            if not token_db:
+                LOGGER.warning("Token is not found in database.")
+                return error(message="Invalid token",
+                             status_code=status.HTTP_404_NOT_FOUND)
 
-            if datetime.fromtimestamp(decoded_token['exp']) < datetime.now():
+            if token_db.used:
+                LOGGER.warning("Token has already been used")
+                return error(message="Token has already been used",
+                             status_code=status.HTTP_404_NOT_FOUND)
+
+            decoded_token = jwt.decode(token, secret_key, algorithms=['HS256'])
+            if datetime.utcfromtimestamp(decoded_token['exp']) < datetime.now():
                 LOGGER.warning("Token has expired")
-                return "Token has expired"
+                return error(message="Token has expired",
+                             status_code=status.HTTP_404_NOT_FOUND)
 
-            return "Token is valid"
-
+            await self.shared_token_dao.update(token_db.id, {"used": True})
+            await self.endpoint_dao.assign_endpoint_to_user(decoded_token['endpoint_id'],
+                                                            request.session.get(SessionAttributes.USER_ID.value))
+            return
         except ExpiredSignatureError:
             LOGGER.warning("Token has expired")
-            return "Token has expired"
-        except InvalidTokenError:
-            LOGGER.warning("Invalid token")
-            return "Invalid token"
+            return error(message="Token has expired",
+                         status_code=status.HTTP_404_NOT_FOUND)
+        except InvalidTokenError as e:
+            LOGGER.warning(f"Invalid token: {e}")
+            return error(message="Invalid token",
+                         status_code=status.HTTP_404_NOT_FOUND)
+        except DuplicateEndpointError as e:
+            LOGGER.error(f"DuplicateEndpointError in create_endpoint: {e}")
+            return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
 
-    def validate_shared_endpoint(self, request, endpoint_id):
-        pass
+    async def validate_shared_endpoint(self, request: Request, token: str):
+        if not token:
+            LOGGER.warning("No token provided.")
+            return error(message="Token is required.",
+                         status_code=status.HTTP_404_NOT_FOUND)
+
+        resp = await self._validate_share_token(request, token)
+        if resp:
+            return resp
+
+        return ok(message="Successfully added token for user...")

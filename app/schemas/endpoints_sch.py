@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 from croniter import croniter, CroniterNotAlphaError, CroniterBadCronError
@@ -57,6 +58,24 @@ class UpdateEndpoint(BaseModel):
             return value
         except (CroniterNotAlphaError, CroniterBadCronError):
             raise ValueError("Invalid cron syntax")
+
+
+class BaseEndpointLogs(BaseModel):
+    status: str
+    created_at: datetime | int
+
+    @field_validator('created_at')
+    def convert_datetime_to_timestamp(cls, value):
+        if isinstance(value, datetime):
+            return int(time.mktime(value.timetuple()))
+        return value
+
+
+class EndpointLogs(BaseEndpointLogs):
+    id: int
+    endpoint_id: int
+    response: dict
+    response_time: int
 
 
 class CreateEndpointInDb(CreateEndpoint):

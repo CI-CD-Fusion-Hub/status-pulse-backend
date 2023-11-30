@@ -20,6 +20,7 @@ def create_endpoint_service():
 
 @router.get("/admin/endpoints", tags=["admin"])
 @auth_required
+@admin_access_required
 async def get_all(request: Request,
                   endpoint_service: EndpointService = Depends(create_endpoint_service)) -> EndpointsOut:
     return await endpoint_service.get_all(request)
@@ -27,6 +28,7 @@ async def get_all(request: Request,
 
 @router.get("/admin/endpoints/{endpoint_id}", tags=["admin"])
 @auth_required
+@admin_access_required
 async def get_by_id(request: Request, endpoint_id: int,
                     endpoint_service: EndpointService = Depends(create_endpoint_service)) -> BaseEndpointsOut:
     return await endpoint_service.get_by_id(request, endpoint_id)
@@ -34,6 +36,7 @@ async def get_by_id(request: Request, endpoint_id: int,
 
 @router.get("/admin/endpoints/{endpoint_id}/status", tags=["admin"])
 @auth_required
+@admin_access_required
 async def get_status_graph_by_id(request: Request, endpoint_id: int,
                                  endpoint_service: EndpointService = Depends(create_endpoint_service)) -> EndpointsOut:
     return await endpoint_service.get_status_graph_by_id(request, endpoint_id)
@@ -41,6 +44,7 @@ async def get_status_graph_by_id(request: Request, endpoint_id: int,
 
 @router.get("/admin/endpoints/{endpoint_id}/uptime", tags=["admin"])
 @auth_required
+@admin_access_required
 async def get_status_graph_by_id(request: Request, endpoint_id: int,
                                  endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
     return await endpoint_service.get_uptime_graph_by_id(request, endpoint_id)
@@ -48,6 +52,7 @@ async def get_status_graph_by_id(request: Request, endpoint_id: int,
 
 @router.put("/admin/endpoints/{endpoint_id}", tags=["admin"])
 @auth_required
+@admin_access_required
 async def update_endpoint(request: Request, endpoint_id: int, endpoint_data: UpdateEndpoint,
                           endpoint_service: EndpointService = Depends(create_endpoint_service)) -> BaseEndpointsOut:
     return await endpoint_service.update_endpoint(request, endpoint_id, endpoint_data)
@@ -55,6 +60,7 @@ async def update_endpoint(request: Request, endpoint_id: int, endpoint_data: Upd
 
 @router.delete("/admin/endpoints/{endpoint_id}", tags=["admin"])
 @auth_required
+@admin_access_required
 async def delete_endpoint(request: Request, endpoint_id: int,
                           endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
     return await endpoint_service.delete_endpoint(request, endpoint_id)

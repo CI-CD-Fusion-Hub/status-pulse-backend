@@ -16,6 +16,13 @@ class UserStatus(Enum):
     INACTIVE = 'inactive'
 
 
+class EndpointStatus(Enum):
+    UNHEALTHY = 'unhealthy'
+    HEALTHY = 'healthy'
+    DEGRADED = 'degraded'
+    NODATA = 'nodata'
+
+
 class AuthMethods(Enum):
     CAS = 'CAS'
     AAD = 'Azure AD'
