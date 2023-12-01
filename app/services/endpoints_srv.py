@@ -140,18 +140,16 @@ class EndpointService:
 
                 if len(error_log) >= 3:
                     hourly_log = BaseEndpointLogs(
-                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at']
-                                       .replace(tzinfo=timezone.utc).timestamp()),
+                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at'].timestamp()),
                         status=EndpointStatus.DEGRADED.value)
                 elif 3 > len(error_log) > 0:
                     hourly_log = BaseEndpointLogs(
-                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at']
-                                       .replace(tzinfo=timezone.utc).timestamp()),
+                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at'].timestamp()),
                         status=EndpointStatus.UNHEALTHY.value)
                 elif logs_current_hour:
                     hourly_log = BaseEndpointLogs(
                         created_at=int(max(logs_current_hour, key=lambda log: log['created_at'])['created_at']
-                                       .replace(tzinfo=timezone.utc).timestamp()),
+                                       .timestamp()),
                         status=EndpointStatus.HEALTHY.value)
                 else:
                     hourly_log = BaseEndpointLogs(
