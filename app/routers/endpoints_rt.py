@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Request, Query
 
 from app.schemas.endpoints_sch import CreateEndpoint, UpdateEndpoint, BaseEndpointsOut, EndpointsOut
@@ -48,6 +50,16 @@ async def get_status_graph_by_id(request: Request, endpoint_id: int,
 async def get_status_graph_by_id(request: Request, endpoint_id: int,
                                  endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
     return await endpoint_service.get_uptime_graph_by_id(request, endpoint_id)
+
+
+@router.get("/endpoints/{endpoint_id}/uptime/logs", tags=["endpoints"])
+@auth_required
+async def get_uptime_logs_by_interval(request: Request, endpoint_id: int,
+                                      date_from: datetime = Query(None),
+                                      date_to: datetime = Query(None),
+                                      full: bool = Query(None),
+                                      endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
+    return await endpoint_service.get_uptime_logs_by_interval(request, endpoint_id, date_from, date_to, full)
 
 
 @router.post("/endpoints/{endpoint_id}/share", tags=["endpoints"])

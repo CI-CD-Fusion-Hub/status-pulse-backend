@@ -1,9 +1,11 @@
 import re
 from datetime import datetime, timedelta
 
-from sqlalchemy import text
+from sqlalchemy import text, select, and_
+
 from app.utils import database
 from app.utils.enums import DatabaseSchemas
+
 
 class LogTableDAO:
     def __init__(self):
@@ -47,7 +49,6 @@ class LogTableDAO:
     async def select_logs_from_last_hours(self, table_name: str, hours: int):
         """Select records from a specific log table for the last 24 hours."""
         sanitized_table_name = self._sanitize_table_name(table_name)
-        # Calculate the timestamp for 24 hours ago
         twenty_four_hours_ago = datetime.now() - timedelta(hours=hours)
         # Format the timestamp in a way that's compatible with your database
         formatted_timestamp = twenty_four_hours_ago.strftime("%Y-%m-%d %H:%M:%S")
@@ -60,6 +61,38 @@ class LogTableDAO:
         async with self.db:
             try:
                 result = await self.db.execute(text(select_query))
+                records = result.fetchall()
+                return records
+            except Exception as e:
+                await self.db.rollback()
+                raise e
+
+    async def select_logs_by_interval(self, table_name: str, date_from: datetime = None,
+                                      date_to: datetime = None, full: bool = False):
+        """Select logs from a specified log table within a given time interval."""
+        query = select("*").select_from(
+            text(f"{DatabaseSchemas.LOG_SCHEMA.value}.{table_name}")
+        ).order_by(text('created_at DESC'))
+
+        conditions = []
+        params = {}
+
+        if date_from:
+            conditions.append(text("created_at >= :date_from"))
+            params['date_from'] = date_from
+        if date_to:
+            conditions.append(text("created_at <= :date_to"))
+            params['date_to'] = date_to
+
+        if not full:
+            conditions.append(text("status != 'healthy'"))
+
+        if conditions:
+            query = query.where(and_(*conditions))
+
+        async with self.db:
+            try:
+                result = await self.db.execute(query, params)
                 records = result.fetchall()
                 return records
             except Exception as e:

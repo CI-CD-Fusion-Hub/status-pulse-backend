@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List
 
 from psycopg2 import errorcodes
@@ -65,7 +66,8 @@ class EndpointDAO:
             result = await self.db.execute(select(model.Endpoints).where(model.Endpoints.id == endpoint_id))
             return result.scalars().first()
 
-    async def get_by_id_with_latest_log_status(self, endpoint_id: int) -> model.Endpoints:
+    async def get_by_id_with_latest_log_status(self, endpoint_id: int, before: datetime = None, after: datetime = None,
+                        full: bool = False) -> model.Endpoints:
         """Fetch a specific endpoint by its ID."""
         async with self.db:
             result = await self.db.execute(select(model.Endpoints).where(model.Endpoints.id == endpoint_id))
@@ -73,6 +75,7 @@ class EndpointDAO:
 
             if endpoint and endpoint.log_table:
                 log_table_name = f"log.{endpoint.log_table}"
+
                 latest_log_result = await self.db.execute(
                     select(text('status'))
                     .select_from(text(log_table_name))
