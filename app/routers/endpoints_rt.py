@@ -52,9 +52,9 @@ async def get_status_graph_by_id(request: Request, endpoint_id: int,
 
 @router.post("/endpoints/{endpoint_id}/share", tags=["endpoints"])
 @auth_required
-async def share_endpoint(request: Request, endpoint_id: int, exp_time: CreateTokenBody,
+async def share_endpoint(request: Request, endpoint_id: int, timestamp: CreateTokenBody,
                          endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
-    return await endpoint_service.share_endpoint(request, endpoint_id, exp_time.exp_time_minutes)
+    return await endpoint_service.share_endpoint(request, endpoint_id, timestamp.expiration)
 
 
 @router.post("/endpoints", tags=["endpoints"])

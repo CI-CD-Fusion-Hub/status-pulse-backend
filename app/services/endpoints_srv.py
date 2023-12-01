@@ -3,7 +3,6 @@ import jwt
 from datetime import timedelta, datetime, timezone
 
 from fastapi import Request, status
-from jwt import ExpiredSignatureError, InvalidTokenError
 
 from app.daos.endpoints_dao import EndpointDAO, DuplicateEndpointError
 from app.daos.log_table_dao import LogTableDAO
@@ -11,10 +10,11 @@ from app.daos.shared_tokens_dao import SharedTokenDAO
 from app.models.db_models import create_log_table
 from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, \
     EndpointsOut, EndpointLogs, BaseEndpointLogs
-from app.schemas.shared_tokens_sch import CreateToken, CreateTokenBody
+from app.schemas.shared_tokens_sch import CreateToken
 from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus
 from app.utils.logger import Logger
 from app.utils.response import ok, error
+from app.utils.token_manager import TokenManager
 
 LOGGER = Logger().start_logger()
 
@@ -243,10 +243,8 @@ class EndpointService:
         LOGGER.info(f"Endpoint with ID {endpoint_id} has been successfully deleted.")
         return ok(message="Endpoint has been successfully deleted.")
 
-    async def share_endpoint(self, request, endpoint_id: int, exp_time: int):
+    async def share_endpoint(self, request, endpoint_id: int, expiration: int):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
-
-        user_id = request.session.get(SessionAttributes.USER_ID.value)
         user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
 
         if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
@@ -262,71 +260,39 @@ class EndpointService:
                 status_code=status.HTTP_404_NOT_FOUND
             )
 
-        token = self._generate_share_token(endpoint_id, exp_time)
+        token = TokenManager.generate_share_token(endpoint_id, expiration)
         await self.shared_token_dao.create(
-            CreateToken(user_id=user_id, token=token, endpoint_id=endpoint_id, used=False))
+            CreateToken(user_id=request.session.get(SessionAttributes.USER_ID.value),
+                        token=token, endpoint_id=endpoint_id, used=False)
+        )
         return ok(message="Share token is generated.", data=token)
-
-    @classmethod
-    def _generate_share_token(cls, endpoint_id: int, minutes: int):
-        secret_key = "your_secret_key"
-        expiration_time = datetime.now() + timedelta(minutes=minutes)
-
-        token = jwt.encode(
-            {
-                'exp': expiration_time,
-                'endpoint_id': endpoint_id,
-                'one_time': True
-            },
-            secret_key, algorithm='HS256')
-
-        token_str = token.decode('utf-8') if isinstance(token, bytes) else token
-        return token_str
-
-    async def _validate_share_token(self, request: Request, token: str):
-        secret_key = "your_secret_key"
-        try:
-            token_db = await self.shared_token_dao.get_by_token(token)
-            if not token_db:
-                LOGGER.warning("Token is not found in database.")
-                return error(message="Invalid token",
-                             status_code=status.HTTP_404_NOT_FOUND)
-
-            if token_db.used:
-                LOGGER.warning("Token has already been used")
-                return error(message="Token has already been used",
-                             status_code=status.HTTP_404_NOT_FOUND)
-
-            decoded_token = jwt.decode(token, secret_key, algorithms=['HS256'])
-            if datetime.utcfromtimestamp(decoded_token['exp']) < datetime.now():
-                LOGGER.warning("Token has expired")
-                return error(message="Token has expired",
-                             status_code=status.HTTP_404_NOT_FOUND)
-
-            await self.shared_token_dao.update(token_db.id, {"used": True})
-            await self.endpoint_dao.assign_endpoint_to_user(decoded_token['endpoint_id'],
-                                                            request.session.get(SessionAttributes.USER_ID.value))
-            return
-        except ExpiredSignatureError:
-            LOGGER.warning("Token has expired")
-            return error(message="Token has expired",
-                         status_code=status.HTTP_404_NOT_FOUND)
-        except InvalidTokenError as e:
-            LOGGER.warning(f"Invalid token: {e}")
-            return error(message="Invalid token",
-                         status_code=status.HTTP_404_NOT_FOUND)
-        except DuplicateEndpointError as e:
-            LOGGER.error(f"DuplicateEndpointError in create_endpoint: {e}")
-            return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
 
     async def validate_shared_endpoint(self, request: Request, token: str):
         if not token:
             LOGGER.warning("No token provided.")
-            return error(message="Token is required.",
+            return error(message="Token is required.", status_code=status.HTTP_404_NOT_FOUND)
+
+        token_db = await self.shared_token_dao.get_by_token(token)
+        if not token_db:
+            LOGGER.warning("Token is not found in database.")
+            return error(message="Invalid token",
                          status_code=status.HTTP_404_NOT_FOUND)
 
-        resp = await self._validate_share_token(request, token)
-        if resp:
-            return resp
+        if token_db.used:
+            LOGGER.warning("Token has already been used")
+            return error(message="Token has already been used.",
+                         status_code=status.HTTP_404_NOT_FOUND)
 
-        return ok(message="Successfully added token for user...")
+        try:
+            decoded_token = await TokenManager.validate_share_token(token)
+            await self.endpoint_dao.assign_endpoint_to_user(decoded_token['endpoint_id'],
+                                                            request.session.get(SessionAttributes.USER_ID.value))
+            await self.shared_token_dao.update(token_db.id, {"used": True})
+
+            return ok(message="Successfully added endpoint for user.")
+        except ValueError as e:
+            LOGGER.error(f"Token validation error: {e}")
+            return error(message=str(e), status_code=status.HTTP_400_BAD_REQUEST)
+        except DuplicateEndpointError as e:
+            LOGGER.error(f"DuplicateEndpointError in create_endpoint: {e}")
+            return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)

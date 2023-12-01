@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     app_ssl_cert: str = Field(..., env="app_ssl_cert")
     app_admin_email: str = Field(..., env="app_admin_email")
     app_admin_pass: str = Field(..., env="app_admin_pass")
+    app_token_secret: str = Field(..., env="app_token_secret")
 
     db_host: str = Field(..., env="db_host")
     db_user: str = Field(..., env="db_user")
@@ -49,6 +50,12 @@ class Settings(BaseSettings):
             "user": self.db_user,
             "password": self.db_password,
             "name": self.db_name
+        }
+
+    @property
+    def token(self) -> Dict[str, str]:
+        return {
+            "secret": self.app_token_secret
         }
 
     class Config:

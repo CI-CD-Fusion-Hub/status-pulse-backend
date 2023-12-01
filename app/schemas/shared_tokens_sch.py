@@ -1,4 +1,4 @@
-from typing import Optional
+from datetime import datetime
 
 from pydantic import BaseModel
 
@@ -11,4 +11,4 @@ class CreateToken(BaseModel):
 
 
 class CreateTokenBody(BaseModel):
-    exp_time_minutes: Optional[int] = 5
+    expiration: int
