@@ -77,7 +77,11 @@ class EndpointService:
 
     async def get_by_id(self, request: Request, endpoint_id: int):
         await self._validate_user_access(request, endpoint_id)
-        endpoint = await self.is_endpoint_exist(endpoint_id)
+        endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id)
+        if not endpoint:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
+                         status_code=status.HTTP_404_NOT_FOUND)
 
         LOGGER.info(f"Successfully retrieved endpoint with ID {endpoint_id}.")
         return ok(message="Successfully provided endpoint.",
