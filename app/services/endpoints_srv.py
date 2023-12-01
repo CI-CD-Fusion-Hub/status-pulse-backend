@@ -47,6 +47,15 @@ class EndpointService:
 
         LOGGER.info(f"User access validated for endpoint with ID {endpoint_id}.")
 
+    async def is_endpoint_exist(self, endpoint_id: int):
+        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
+        if not endpoint:
+            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
+            raise CustomHTTPException(detail=f"Endpoint with ID {endpoint_id} does not exist.",
+                                      status_code=status.HTTP_404_NOT_FOUND)
+
+        return endpoint
+
     async def get_all(self, request: Request):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
 
@@ -68,12 +77,7 @@ class EndpointService:
 
     async def get_by_id(self, request: Request, endpoint_id: int):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
-            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
-                         status_code=status.HTTP_404_NOT_FOUND)
+        endpoint = await self.is_endpoint_exist(endpoint_id)
 
         LOGGER.info(f"Successfully retrieved endpoint with ID {endpoint_id}.")
         return ok(message="Successfully provided endpoint.",
@@ -81,12 +85,7 @@ class EndpointService:
 
     async def get_status_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 24):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
-            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
-                         status_code=status.HTTP_404_NOT_FOUND)
+        endpoint = await self.is_endpoint_exist(endpoint_id)
 
         endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())
 
@@ -110,19 +109,16 @@ class EndpointService:
 
     async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 72):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
-            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
-                         status_code=status.HTTP_404_NOT_FOUND)
+        endpoint = await self.is_endpoint_exist(endpoint_id)
 
         hourly_logs = []
 
         if endpoint.log_table:
             logs = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, hours)
 
-            end_time = datetime.now()
+            current_time = datetime.now()
+            rounded_time = current_time + timedelta(hours=1)
+            end_time = rounded_time.replace(minute=0, second=0, microsecond=0)
             start_time = end_time - timedelta(hours=hours)
 
             for hour in range(hours):
@@ -194,12 +190,7 @@ class EndpointService:
 
     async def update_endpoint(self, request: Request, endpoint_id: int, endpoint_data: UpdateEndpoint):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
-            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
-                         status_code=status.HTTP_404_NOT_FOUND)
+        await self.is_endpoint_exist(endpoint_id)
 
         data_to_update = endpoint_data.model_dump()
         data_to_update = {k: v for k, v in data_to_update.items() if v is not None}
@@ -211,30 +202,17 @@ class EndpointService:
 
     async def delete_endpoint(self, request: Request, endpoint_id: int):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Attempted to delete a non-existent endpoint with ID {endpoint_id}.")
-            return error(
-                message=f"Endpoint with ID {endpoint_id} does not exist.",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
+        endpoint = await self.is_endpoint_exist(endpoint_id)
 
         await self.endpoint_dao.delete(endpoint_id)
+
         await self.log_table_dao.delete_log_table(endpoint.log_table)
         LOGGER.info(f"Endpoint with ID {endpoint_id} has been successfully deleted.")
         return ok(message="Endpoint has been successfully deleted.")
 
     async def share_endpoint(self, request, endpoint_id: int, expiration: int):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Attempted to delete a non-existent endpoint with ID {endpoint_id}.")
-            return error(
-                message=f"Endpoint with ID {endpoint_id} does not exist.",
-                status_code=status.HTTP_404_NOT_FOUND
-            )
+        await self.is_endpoint_exist(endpoint_id)
 
         token = TokenManager.generate_share_token(endpoint_id, expiration)
         await self.shared_token_dao.create(
@@ -276,12 +254,7 @@ class EndpointService:
     async def get_uptime_logs_by_interval(self, request: Request, endpoint_id: int, date_from: datetime,
                                           date_to: datetime, full: bool):
         await self._validate_user_access(request, endpoint_id)
-
-        endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
-        if not endpoint:
-            LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
-            return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
-                         status_code=status.HTTP_404_NOT_FOUND)
+        endpoint = await self.is_endpoint_exist(endpoint_id)
 
         endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())
 

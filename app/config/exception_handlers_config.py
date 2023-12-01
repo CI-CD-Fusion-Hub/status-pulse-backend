@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 
 from app.exceptions.custom_http_expeption import CustomHTTPException
-from app.utils.error_handlers import exception_handler
+from app.utils.error_handlers import exception_handler, http_exception_handler
 
 
 async def exception_handler_(request: Request, exc: Exception):

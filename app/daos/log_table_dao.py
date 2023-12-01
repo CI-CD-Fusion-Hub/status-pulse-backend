@@ -70,8 +70,10 @@ class LogTableDAO:
     async def select_logs_by_interval(self, table_name: str, date_from: datetime = None,
                                       date_to: datetime = None, full: bool = False):
         """Select logs from a specified log table within a given time interval."""
+        sanitized_table_name = self._sanitize_table_name(table_name)
+
         query = select("*").select_from(
-            text(f"{DatabaseSchemas.LOG_SCHEMA.value}.{table_name}")
+            text(f"{DatabaseSchemas.LOG_SCHEMA.value}.{sanitized_table_name}")
         ).order_by(text('created_at DESC'))
 
         conditions = []

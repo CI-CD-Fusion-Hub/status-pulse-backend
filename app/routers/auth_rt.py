@@ -23,11 +23,6 @@ async def logout_user(request: Request, auth_service: AuthService = Depends(crea
     return await auth_service.logout(request)
 
 
-@router.get("/logout", tags=["auth"])
-async def logout_user(request: Request, auth_service: AuthService = Depends(create_auth_service)) -> Response:
-    return await auth_service.logout(request)
-
-
 @router.post("/register", tags=["auth"])
 async def register_user(request: Request, user_info: RegisterUser,
                         auth_service: AuthService = Depends(create_auth_service)) -> UserResponse:
