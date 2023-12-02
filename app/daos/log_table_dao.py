@@ -5,6 +5,9 @@ from sqlalchemy import text, select, and_
 
 from app.utils import database
 from app.utils.enums import DatabaseSchemas
+from app.utils.logger import Logger
+
+LOGGER = Logger().start_logger()
 
 
 class LogTableDAO:
@@ -82,10 +85,12 @@ class LogTableDAO:
         if date_from:
             utc_date_from = date_from.astimezone(timezone.utc).replace(tzinfo=None)
             conditions.append(text("created_at >= :date_from"))
+            LOGGER.debug(f"Get logs from date: {utc_date_from}")
             params['date_from'] = utc_date_from
         if date_to:
             utc_date_to = date_to.astimezone(timezone.utc).replace(tzinfo=None)
             conditions.append(text("created_at <= :date_to"))
+            LOGGER.debug(f"Get logs to date: {utc_date_to}")
             params['date_to'] = utc_date_to
 
         if not full:
