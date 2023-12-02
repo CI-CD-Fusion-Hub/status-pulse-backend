@@ -1,5 +1,5 @@
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text, select, and_
 
@@ -80,11 +80,13 @@ class LogTableDAO:
         params = {}
 
         if date_from:
+            utc_date_from = date_from.astimezone(timezone.utc).replace(tzinfo=None)
             conditions.append(text("created_at >= :date_from"))
-            params['date_from'] = date_from
+            params['date_from'] = utc_date_from
         if date_to:
+            utc_date_to = date_to.astimezone(timezone.utc).replace(tzinfo=None)
             conditions.append(text("created_at <= :date_to"))
-            params['date_to'] = date_to
+            params['date_to'] = utc_date_to
 
         if not full:
             conditions.append(text("status != 'healthy'"))
