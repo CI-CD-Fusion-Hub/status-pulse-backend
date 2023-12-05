@@ -37,14 +37,14 @@ class UserDAO:
             result = await self.db.execute(select(model.Users).where(model.Users.email == email))
             return result.scalars().first()
 
-    async def get_detailed_user_info_by_email(self, email: str):
+    async def get_detailed_user_info_by_email(self, email: str) -> model.Notifications:
         """Fetch a user with their endpoints access."""
         async with self.db:
             stmt = (
                 select(model.Users)
                 .options(
-                    joinedload(model.Users.endpoints)
-                    .joinedload(model.UserEndpoints.endpoint)
+                    joinedload(model.Users.endpoints).joinedload(model.UserEndpoints.endpoint),
+                    joinedload(model.Users.notifications)
                 )
                 .where(model.Users.email == email)
             )

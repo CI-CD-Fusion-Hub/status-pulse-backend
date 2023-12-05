@@ -1,6 +1,6 @@
 from typing import Optional
 
-from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -24,6 +24,7 @@ class Users(Base):
     access_level = Column(String)
 
     endpoints = relationship("UserEndpoints", back_populates="user")
+    notifications = relationship("Notifications", back_populates="user")
 
     def as_dict(self):
         return {
@@ -79,6 +80,8 @@ class Endpoints(Base):
 
     status = relationship("EndpointsStatus", back_populates="endpoint", uselist=False, lazy="subquery")
     users = relationship("UserEndpoints", back_populates="endpoint")
+
+    notifications = relationship("EndpointNotifications", back_populates="endpoint", lazy="subquery")
 
     def as_dict(self):
         return {
@@ -164,18 +167,27 @@ class ShareTokens(Base):
 
 class Notifications(Base):
     __tablename__ = "notifications"
-    __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
+    __table_args__ = (
+        UniqueConstraint('user_id', 'name', name='uix_user_id_name'),
+        {'schema': DatabaseSchemas.CONFIG_SCHEMA.value},
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.users.id", ondelete='CASCADE'))
+    name = Column(String)
+    description = Column(String)
     type = Column(String)
     properties = Column(JSONB)
     created_at = Column(TIMESTAMP, default=func.now())
+
+    user = relationship("Users", back_populates="notifications")
 
     def as_dict(self):
         return {
             'id': self.id,
             'user_id': self.user_id,
+            'name': self.name,
+            'description': self.description,
             'type': self.type,
             'properties': self.properties,
             'created_at': self.created_at.isoformat() if self.created_at else None
@@ -188,27 +200,19 @@ class EndpointNotifications(Base):
 
     endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id",
                                              ondelete='CASCADE'), primary_key=True)
-    notifications_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.notifications.id",
-                                                  ondelete='CASCADE'), primary_key=True)
+    notification_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.notifications.id",
+                                                 ondelete='CASCADE'), primary_key=True)
     created_at = Column(TIMESTAMP, default=func.now())
+
+    endpoint = relationship("Endpoints", back_populates="notifications", uselist=False)
+    notification = relationship("Notifications", uselist=False, lazy="subquery")
 
     def as_dict(self):
         return {
-            'id': self.id,
             'endpoint_id': self.endpoint_id,
-            'notifications_id': self.notifications_id,
+            'notification_id': self.notification_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
-
-
-class GenericLogTable(Base):
-    __tablename__ = 'generic_log'  # Placeholder name
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    status = Column(String)
-    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id"), nullable=True)
-    created_at = Column(TIMESTAMP, default=func.now())
-    response = Column(JSONB)
-    response_time = Column(Integer)
 
 
 async def create_log_table(table_name: str):

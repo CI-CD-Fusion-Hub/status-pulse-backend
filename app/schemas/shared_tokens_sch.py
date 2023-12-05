@@ -16,6 +16,14 @@ class CreateTokenBody(BaseModel):
     expiration: int
     permissions: str
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "expiration": 1701772285,
+                "permissions": "View"
+            }
+        }
+
     @field_validator("permissions")
     def check_order_status(cls, permissions):
         """Validates Permissions."""

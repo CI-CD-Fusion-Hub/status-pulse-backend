@@ -1,5 +1,6 @@
 import uuid
 from datetime import timedelta, datetime, timezone
+from typing import List
 
 from fastapi import Request, status
 
@@ -94,15 +95,24 @@ class EndpointService:
     async def get_all(self, request: Request, page: int = 1, per_page: int = 5, search_query: str = None):
         endpoints, total_count = await self.fetch_endpoints(request, page, per_page, search_query)
 
+
         if not endpoints:
             LOGGER.info("No endpoints found in the database.")
             return ok(message="No endpoints found.", data=[])
+
+        endpoints_rsp = []
+        for e in endpoints:
+            endpoint_rsp = BaseEndpointsOut.model_validate(e.as_dict())
+
+            endpoint_rsp.notifications = [{"id": n.notification.id, "name": n.notification.name}
+                     for n in e.notifications]
+            endpoints_rsp.append(endpoint_rsp)
 
         LOGGER.info(f"Retrieved {len(endpoints)} endpoints.")
         return ok(
             message="Successfully provided all endpoints.",
             data={
-                "data": [BaseEndpointsOut.model_validate(endpoint.as_dict()) for endpoint in endpoints],
+                "data": [endpoint for endpoint in endpoints_rsp],
                 "total_count": total_count,
                 "pages": (total_count + per_page - 1) // per_page
             }
@@ -117,10 +127,13 @@ class EndpointService:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
             return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
                          status_code=status.HTTP_404_NOT_FOUND)
+        endpoint_rsp = BaseEndpointsOut.model_validate(endpoint.as_dict())
 
+        endpoint_rsp.notifications = [{"id": n.notification.id, "name": n.notification.name}
+                                      for n in endpoint.notifications]
         LOGGER.info(f"Successfully retrieved endpoint with ID {endpoint_id}.")
         return ok(message="Successfully provided endpoint.",
-                  data=BaseEndpointsOut.model_validate(endpoint.as_dict()))
+                  data=endpoint_rsp)
 
     async def get_status_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 24):
         await self._validate_admin_access(request, endpoint_id)
@@ -222,9 +235,15 @@ class EndpointService:
             endpoint.status = None
             await self.endpoint_dao.register_endpoint_status(endpoint.id, endpoint.status)
             await create_log_table(log_table)
+
+            if endpoint_data.notifications:
+                await self._upsert_notifications_to_endpoint(request, endpoint.id, endpoint_data.notifications)
+
+            endpoint_response = BaseEndpointsOut.model_validate(endpoint.as_dict())
+            endpoint_response.notifications = endpoint_data.notifications
             return ok(
                 message="Successfully created endpoint.",
-                data=BaseEndpointsOut.model_validate(endpoint.as_dict())
+                data=endpoint_response
             )
         except DuplicateEndpointError as e:
             LOGGER.error(f"DuplicateEndpointError in create_endpoint: {e}")
@@ -236,12 +255,17 @@ class EndpointService:
         await self._validate_user_rights(request, endpoint_id)
 
         data_to_update = endpoint_data.model_dump()
-        data_to_update = {k: v for k, v in data_to_update.items() if v is not None}
+        data_to_update = {k: v for k, v in data_to_update.items() if v is not None and k != 'notifications'}
+
+        await self._upsert_notifications_to_endpoint(request, endpoint_id, endpoint_data.notifications)
 
         endpoint = await self.endpoint_dao.update(endpoint_id, data_to_update)
 
+        endpoint_response = BaseEndpointsOut.model_validate(endpoint.as_dict())
+        endpoint_response.notifications = endpoint_data.notifications
+
         LOGGER.info(f"Successfully updated endpoint ID {endpoint_id}.")
-        return ok(message="Successfully updated endpoint.", data=BaseEndpointsOut.model_validate(endpoint.as_dict()))
+        return ok(message="Successfully updated endpoint.", data=endpoint_response)
 
     async def delete_endpoint(self, request: Request, endpoint_id: int):
         await self._validate_admin_access(request, endpoint_id)
@@ -321,3 +345,15 @@ class EndpointService:
 
         return ok(message="Successfully provided status graph for endpoint.",
                   data=endpoint_data.logs)
+
+    async def _upsert_notifications_to_endpoint(self, request: Request, endpoint_id: int, notification_ids: List[int]):
+        user_notifications_set = request.session.get(SessionAttributes.USER_NOTIFICATIONS.value)
+
+        for notification_id in notification_ids:
+            if notification_id not in user_notifications_set:
+                raise CustomHTTPException(detail=f"Notification with id {notification_id} does not exist.",
+                                          status_code=status.HTTP_404_NOT_FOUND)
+
+        await self.endpoint_dao.delete_assigned_notifications(endpoint_id)
+        await self.endpoint_dao.assign_notifications(endpoint_id, notification_ids)
+        LOGGER.info(f"Successfully added notification to endpoint ID {endpoint_id}.")

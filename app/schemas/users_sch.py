@@ -65,11 +65,11 @@ class UpdateUserProfile(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "first_name": "asd",
-                "last_name": "CH",
-                "email": "test1@gmail.com",
-                "password": "asdf@asdf",
-                "confirm_password": "asdf@asdf",
+                "first_name": "First Name",
+                "last_name": "Last Name",
+                "email": "sampleemail@co.com",
+                "password": "Dummy@pass123",
+                "confirm_password": "Dummy@pass123"
             }
         }
 
@@ -89,11 +89,11 @@ class UpdateUserAdmin(UpdateUserProfile):
     class Config:
         json_schema_extra = {
             "example": {
-                "first_name": "asd",
-                "last_name": "CH",
-                "email": "test1@gmail.com",
-                "password": "asdf@asdf",
-                "confirm_password": "asdf@asdf",
+                "first_name": "First Name",
+                "last_name": "Last Name",
+                "email": "sampleemail@co.com",
+                "password": "Dummy@pass123",
+                "confirm_password": "Dummy@pass123",
                 "status": "inactive",
                 "access_level": "Admin"
             }

@@ -11,6 +11,17 @@ class RegisterUser(BaseModel):
     confirm_password: str
     password: str
 
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "first_name": "First Name",
+                "last_name": "Last Name",
+                "email": "sampleemail@co.com",
+                "password": "Dummy@pass123",
+                "confirm_password": "Dummy@pass123"
+            }
+        }
+
     @field_validator("email", check_fields=True)
     def email_check(cls, email):
         return ValidatorUtils.validate_email(email)
@@ -23,6 +34,14 @@ class RegisterUser(BaseModel):
 class LoginUser(BaseModel):
     email: str
     password: str
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "email": "sampleemail@co.com",
+                "password": "Dummy@pass123"
+            }
+        }
 
     @field_validator("email")
     def email_check(cls, email):

@@ -1,8 +1,9 @@
 from typing import List, Dict
 
 from psycopg2 import errorcodes
-from sqlalchemy import select, delete, update, text, String, or_, func
+from sqlalchemy import select, delete, update, String, or_, func
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models import db_models as model
 from app.schemas.endpoints_sch import CreateEndpointInDb
@@ -37,25 +38,32 @@ class EndpointDAO:
     async def _fetch_endpoints_with_filter(self, page: int, per_page: int, search_query: str,
                                            user_endpoints: dict, is_admin: bool) -> List[model.Endpoints]:
         """Fetch endpoints based on given criteria."""
-        query = select(model.Endpoints).join(model.EndpointsStatus)
+        query = select(model.Endpoints).options(
+            selectinload(model.Endpoints.notifications).selectinload(model.EndpointNotifications.notification)
+        ).join(model.EndpointsStatus)
 
-        if not is_admin and not user_endpoints:
-            return []
+        # Apply filtering for non-admin users
         if not is_admin:
-            query = query.where(model.Endpoints.id.in_(user_endpoints.keys()))
+            if user_endpoints:
+                query = query.where(model.Endpoints.id.in_(user_endpoints.keys()))
+            else:
+                return []
 
+        # Apply search filter
         if search_query:
             search_filter = or_(
                 model.Endpoints.name.ilike(f"%{search_query}%"),
                 model.Endpoints.description.ilike(f"%{search_query}%"),
                 model.Endpoints.url.ilike(f"%{search_query}%"),
                 model.Endpoints.response.cast(String).ilike(f"%{search_query}%"),
-                model.EndpointsStatus.status.ilike(f"%{search_query}%")
+                model.EndpointsStatus.status.ilike(f"%{search_query}%")  # Ensure this relation exists and is correct
             )
             query = query.where(search_filter)
 
+        # Apply ordering and pagination
         query = query.order_by(model.Endpoints.created_at).offset((page - 1) * per_page).limit(per_page)
 
+        # Execute the query and fetch results
         result = await self.db.execute(query)
         return result.scalars().all()
 
@@ -77,14 +85,17 @@ class EndpointDAO:
         """Fetch a specific endpoint by its ID."""
         async with self.db:
             result = await self.db.execute(select(model.Endpoints)
-                                           .join(model.EndpointsStatus).where(model.Endpoints.id == endpoint_id))
+                                           .options(joinedload(model.Endpoints.notifications)
+                                                    .joinedload(model.EndpointNotifications.notification))
+                                           .join(model.EndpointsStatus)
+                                           .where(model.Endpoints.id == endpoint_id))
             endpoint = result.scalars().first()
 
-            if user_endpoints:
+            if len(user_endpoints.keys()) > 0:
                 endpoint.permission = user_endpoints[endpoint.id]["permissions"]
-                return endpoint
+            else:
+                endpoint.permission = EndpointPermissions.UPDATE.value
 
-            endpoint.permission = EndpointPermissions.UPDATE.value
             return endpoint
 
     async def update(self, endpoint_id: int, updated_data) -> model.Endpoints:
@@ -189,3 +200,19 @@ class EndpointDAO:
             result = await self.db.execute(query)
             count = result.scalar()
             return count
+
+    async def assign_notifications(self, endpoint_id: int, notification_ids: List[int]):
+        """Add a list of notifications to a specific endpoint."""
+        notifications = [model.EndpointNotifications(endpoint_id=endpoint_id, notification_id=notification_id)
+                         for notification_id in notification_ids]
+
+        async with self.db:
+            self.db.add_all(notifications)
+            await self.db.commit()
+
+    async def delete_assigned_notifications(self, endpoint_id: int):
+        """Delete a notifications for endpoint."""
+        async with self.db:
+            await self.db.execute(delete(model.EndpointNotifications)
+                                  .where(model.EndpointNotifications.endpoint_id == endpoint_id))
+            await self.db.commit()

@@ -1,21 +1,37 @@
 import time
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from croniter import croniter, CroniterNotAlphaError, CroniterBadCronError
 
 from pydantic import BaseModel, field_validator
 
 
 class CreateEndpoint(BaseModel):
-    name: str
-    description: Optional[str] = None
     url: str
-    threshold: int
-    application_id: Optional[int] = None
     cron: str
+    name: str
+    type: str
+    threshold: int
     status_code: int
     response: Optional[dict] = {}
-    type: str
+    description: Optional[str] = None
+    application_id: Optional[int] = None
+    notifications: Optional[List[int]] = []
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Name of the endpoint",
+                "description": "Description of the endpoint",
+                "url": "https://sample-url/api/v1/status",
+                "threshold": 300,
+                "cron": "*/1 * * * *",
+                "status_code": 200,
+                "response": {},
+                "type": "https",
+                "notifications": []
+            }
+        }
 
     @field_validator('cron')
     def validate_cron_expression(cls, value):
@@ -43,6 +59,21 @@ class UpdateEndpoint(BaseModel):
     status_code: Optional[int] = None
     response: Optional[dict] = {}
     type: Optional[str] = None
+    notifications: Optional[List[int]] = []
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "name": "Name of the endpoint",
+                "description": "Description of the endpoint",
+                "url": "https://sample-url/api/v1/status",
+                "threshold": 300,
+                "cron": "*/1 * * * *",
+                "status_code": 200,
+                "response": {},
+                "type": "https"
+            }
+        }
 
     @field_validator('cron')
     def validate_cron_expression(cls, value):
@@ -87,6 +118,7 @@ class BaseEndpointsOut(CreateEndpointInDb):
     id: int
     status: str | None
     permission: str | None
+    notifications: List = []
 
 
 class EndpointsOut(BaseEndpointsOut):
