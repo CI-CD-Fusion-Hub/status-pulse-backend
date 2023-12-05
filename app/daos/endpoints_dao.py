@@ -153,6 +153,22 @@ class EndpointDAO:
                 await self.db.rollback()
                 raise e
 
+    async def register_endpoint_status(self, endpoint_id: int, status: str | None):
+        """Assign user to endpoint with specific permissions."""
+        user_endpoint = model.EndpointsStatus(
+            endpoint_id=endpoint_id,
+            status=status
+        )
+        try:
+            async with self.db:
+                self.db.add(user_endpoint)
+                await self.db.commit()
+                return user_endpoint
+        except IntegrityError as e:
+            # Handle other types of IntegrityError (foreign key, etc.) as needed
+            await self.db.rollback()
+            raise e
+
     async def count_total_invoices(self, search_query: str = None, user_endpoints: dict = None):
         """Count the total number of endpoints in the database."""
         async with self.db:

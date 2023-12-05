@@ -219,8 +219,9 @@ class EndpointService:
             await self.endpoint_dao.assign_endpoint_to_user(endpoint.id,
                                                             request.session.get(SessionAttributes.USER_ID.value),
                                                             EndpointPermissions.UPDATE.value)
+            endpoint.status = None
+            await self.endpoint_dao.register_endpoint_status(endpoint.id, endpoint.status)
             await create_log_table(log_table)
-
             return ok(
                 message="Successfully created endpoint.",
                 data=BaseEndpointsOut.model_validate(endpoint.as_dict())
