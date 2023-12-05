@@ -10,8 +10,8 @@ from app.exceptions.custom_http_expeption import CustomHTTPException
 from app.models.db_models import create_log_table
 from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, \
     EndpointsOut, EndpointLogs, BaseEndpointLogs
-from app.schemas.shared_tokens_sch import CreateToken
-from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus
+from app.schemas.shared_tokens_sch import CreateToken, CreateTokenBody
+from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus, EndpointPermissions
 from app.utils.logger import Logger
 from app.utils.response import ok, error
 from app.utils.token_manager import TokenManager
@@ -36,16 +36,27 @@ class EndpointService:
         return table_name
 
     @classmethod
-    async def _validate_user_access(cls, request: Request, endpoint_id: int):
+    async def _validate_admin_access(cls, request: Request, endpoint_id: int):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
-        user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
+        user_endpoints_with_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
 
-        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints:
+        if user_access_level != AccessLevel.ADMIN.value and endpoint_id not in user_endpoints_with_perm.keys():
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
             raise CustomHTTPException(detail=f"Endpoint with ID {endpoint_id} does not exist.",
                                       status_code=status.HTTP_404_NOT_FOUND)
 
         LOGGER.info(f"User access validated for endpoint with ID {endpoint_id}.")
+
+    @classmethod
+    async def _validate_user_rights(cls, request: Request, endpoint_id: int):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        user_endpoints_with_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
+
+        if user_access_level != AccessLevel.ADMIN.value and \
+                user_endpoints_with_perm[endpoint_id]["permissions"] != EndpointPermissions.UPDATE.value:
+            LOGGER.warning(f"User does not have access to update/delete Endpoint with ID {endpoint_id}")
+            raise CustomHTTPException(detail="You do not have permissions to perform this actions.",
+                                      status_code=status.HTTP_400_BAD_REQUEST)
 
     async def is_endpoint_exist(self, endpoint_id: int):
         endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
@@ -56,28 +67,52 @@ class EndpointService:
 
         return endpoint
 
-    async def get_all(self, request: Request):
+    async def fetch_endpoints(self, request: Request, page: int, per_page: int, search_query: str):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
 
         if user_access_level != AccessLevel.ADMIN.value:
             LOGGER.info("Fetching endpoints based on user-specific access.")
-            user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS.value)
-            endpoints = await self.endpoint_dao.get_all_with_latest_log_status(user_endpoints)
-        else:
-            LOGGER.info("Fetching all endpoints for admin user.")
-            endpoints = await self.endpoint_dao.get_all_with_latest_log_status()
+            user_endpoints_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
+
+            return await self.fetch_user_specific_endpoints(user_endpoints_perm, page, per_page, search_query)
+
+        LOGGER.info("Fetching all endpoints for admin user.")
+        return await self.fetch_admin_endpoints(page, per_page, search_query)
+
+    async def fetch_user_specific_endpoints(self, user_endpoints_perm: dict, page: int, per_page: int,
+                                            search_query: str):
+        endpoints = await self.endpoint_dao.get_all_with_latest_log_status(page, per_page, search_query,
+                                                                           user_endpoints_perm)
+        total_count = await self.endpoint_dao.count_total_invoices(search_query, user_endpoints_perm)
+        return endpoints, total_count
+
+    async def fetch_admin_endpoints(self, page: int, per_page: int, search_query: str):
+        endpoints = await self.endpoint_dao.get_all_with_latest_log_status(page, per_page, search_query, is_admin=True)
+        total_count = await self.endpoint_dao.count_total_invoices(search_query=search_query)
+        return endpoints, total_count
+
+    async def get_all(self, request: Request, page: int = 1, per_page: int = 5, search_query: str = None):
+        endpoints, total_count = await self.fetch_endpoints(request, page, per_page, search_query)
 
         if not endpoints:
             LOGGER.info("No endpoints found in the database.")
             return ok(message="No endpoints found.", data=[])
 
         LOGGER.info(f"Retrieved {len(endpoints)} endpoints.")
-        return ok(message="Successfully provided all endpoints.",
-                  data=[BaseEndpointsOut.model_validate(endpoint.as_dict()) for endpoint in endpoints])
+        return ok(
+            message="Successfully provided all endpoints.",
+            data={
+                "data": [BaseEndpointsOut.model_validate(endpoint.as_dict()) for endpoint in endpoints],
+                "total_count": total_count,
+                "pages": (total_count + per_page - 1) // per_page
+            }
+        )
 
     async def get_by_id(self, request: Request, endpoint_id: int):
-        await self._validate_user_access(request, endpoint_id)
-        endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id)
+        await self._validate_admin_access(request, endpoint_id)
+        user_endpoints_with_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
+
+        endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id, user_endpoints_with_perm)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
             return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
@@ -88,7 +123,7 @@ class EndpointService:
                   data=BaseEndpointsOut.model_validate(endpoint.as_dict()))
 
     async def get_status_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 24):
-        await self._validate_user_access(request, endpoint_id)
+        await self._validate_admin_access(request, endpoint_id)
         endpoint = await self.is_endpoint_exist(endpoint_id)
 
         endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())
@@ -112,7 +147,7 @@ class EndpointService:
                   data=endpoint_data.logs)
 
     async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 72):
-        await self._validate_user_access(request, endpoint_id)
+        await self._validate_admin_access(request, endpoint_id)
         endpoint = await self.is_endpoint_exist(endpoint_id)
 
         hourly_logs = []
@@ -122,7 +157,8 @@ class EndpointService:
 
             current_time = datetime.now()
             rounded_time = current_time + timedelta(hours=1)
-            end_time = rounded_time.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
+            end_time = rounded_time.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(
+                tzinfo=None)
             start_time = end_time - timedelta(hours=hours)
 
             for hour in range(hours):
@@ -181,7 +217,8 @@ class EndpointService:
 
             endpoint = await self.endpoint_dao.create(db_data)
             await self.endpoint_dao.assign_endpoint_to_user(endpoint.id,
-                                                            request.session.get(SessionAttributes.USER_ID.value))
+                                                            request.session.get(SessionAttributes.USER_ID.value),
+                                                            EndpointPermissions.UPDATE.value)
             await create_log_table(log_table)
 
             return ok(
@@ -193,8 +230,9 @@ class EndpointService:
             return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
 
     async def update_endpoint(self, request: Request, endpoint_id: int, endpoint_data: UpdateEndpoint):
-        await self._validate_user_access(request, endpoint_id)
+        await self._validate_admin_access(request, endpoint_id)
         await self.is_endpoint_exist(endpoint_id)
+        await self._validate_user_rights(request, endpoint_id)
 
         data_to_update = endpoint_data.model_dump()
         data_to_update = {k: v for k, v in data_to_update.items() if v is not None}
@@ -205,8 +243,9 @@ class EndpointService:
         return ok(message="Successfully updated endpoint.", data=BaseEndpointsOut.model_validate(endpoint.as_dict()))
 
     async def delete_endpoint(self, request: Request, endpoint_id: int):
-        await self._validate_user_access(request, endpoint_id)
+        await self._validate_admin_access(request, endpoint_id)
         endpoint = await self.is_endpoint_exist(endpoint_id)
+        await self._validate_user_rights(request, endpoint_id)
 
         await self.endpoint_dao.delete(endpoint_id)
 
@@ -214,11 +253,12 @@ class EndpointService:
         LOGGER.info(f"Endpoint with ID {endpoint_id} has been successfully deleted.")
         return ok(message="Endpoint has been successfully deleted.")
 
-    async def share_endpoint(self, request, endpoint_id: int, expiration: int):
-        await self._validate_user_access(request, endpoint_id)
+    async def share_endpoint(self, request, endpoint_id: int, token_cfg: CreateTokenBody):
+        await self._validate_admin_access(request, endpoint_id)
         await self.is_endpoint_exist(endpoint_id)
+        await self._validate_user_rights(request, endpoint_id)
 
-        token = TokenManager.generate_share_token(endpoint_id, expiration)
+        token = TokenManager.generate_share_token(endpoint_id, token_cfg)
         await self.shared_token_dao.create(
             CreateToken(user_id=request.session.get(SessionAttributes.USER_ID.value),
                         token=token, endpoint_id=endpoint_id, used=False)
@@ -244,7 +284,8 @@ class EndpointService:
         try:
             decoded_token = await TokenManager.validate_share_token(token)
             await self.endpoint_dao.assign_endpoint_to_user(decoded_token['endpoint_id'],
-                                                            request.session.get(SessionAttributes.USER_ID.value))
+                                                            request.session.get(SessionAttributes.USER_ID.value),
+                                                            decoded_token['permissions'])
             await self.shared_token_dao.update(token_db.id, {"used": True})
 
             return ok(message="Successfully added endpoint for user.")
@@ -257,7 +298,7 @@ class EndpointService:
 
     async def get_uptime_logs_by_interval(self, request: Request, endpoint_id: int, date_from: datetime,
                                           date_to: datetime, full: bool):
-        await self._validate_user_access(request, endpoint_id)
+        await self._validate_admin_access(request, endpoint_id)
         endpoint = await self.is_endpoint_exist(endpoint_id)
 
         endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 
 from app.schemas.endpoints_sch import UpdateEndpoint, BaseEndpointsOut, EndpointsOut
 from app.schemas.response_sch import Response
@@ -22,8 +22,10 @@ def create_endpoint_service():
 @auth_required
 @admin_access_required
 async def get_all(request: Request,
+                  page: int = Query(1, gt=0),
+                  per_page: int = Query(5, gt=0, le=50),
                   endpoint_service: EndpointService = Depends(create_endpoint_service)) -> EndpointsOut:
-    return await endpoint_service.get_all(request)
+    return await endpoint_service.get_all(request, page, per_page)
 
 
 @router.get("/admin/endpoints/{endpoint_id}", tags=["admin"])

@@ -18,8 +18,11 @@ def create_endpoint_service():
 @router.get("/endpoints", tags=["endpoints"])
 @auth_required
 async def get_all(request: Request,
+                  page: int = Query(1, gt=0),
+                  per_page: int = Query(5, gt=0, le=50),
+                  search: str = Query(None),
                   endpoint_service: EndpointService = Depends(create_endpoint_service)) -> EndpointsOut:
-    return await endpoint_service.get_all(request)
+    return await endpoint_service.get_all(request, page, per_page, search)
 
 
 @router.get("/endpoints/share", tags=["endpoints"])
@@ -64,9 +67,9 @@ async def get_uptime_logs_by_interval(request: Request, endpoint_id: int,
 
 @router.post("/endpoints/{endpoint_id}/share", tags=["endpoints"])
 @auth_required
-async def share_endpoint(request: Request, endpoint_id: int, timestamp: CreateTokenBody,
+async def share_endpoint(request: Request, endpoint_id: int, token_cfg: CreateTokenBody,
                          endpoint_service: EndpointService = Depends(create_endpoint_service)) -> Response:
-    return await endpoint_service.share_endpoint(request, endpoint_id, timestamp.expiration)
+    return await endpoint_service.share_endpoint(request, endpoint_id, token_cfg)
 
 
 @router.post("/endpoints", tags=["endpoints"])

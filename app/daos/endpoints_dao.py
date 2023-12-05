@@ -1,13 +1,13 @@
-from datetime import datetime
-from typing import List
+from typing import List, Dict
 
 from psycopg2 import errorcodes
-from sqlalchemy import select, delete, update, text
+from sqlalchemy import select, delete, update, text, String, or_, func
 from sqlalchemy.exc import IntegrityError
 
 from app.models import db_models as model
 from app.schemas.endpoints_sch import CreateEndpointInDb
 from app.utils import database
+from app.utils.enums import EndpointPermissions
 
 
 class DuplicateEndpointError(Exception):
@@ -19,46 +19,53 @@ class EndpointDAO:
     def __init__(self):
         self.db = database.SessionLocal()
 
-    async def get_all(self) -> List[model.Endpoints]:
-        """Fetch all endpoints."""
-        async with self.db:
-            result = await self.db.execute(select(model.Endpoints).order_by(model.Endpoints.created_at))
-            return result.scalars().all()
-
-    async def get_all_by_ids(self, ids: List[int]) -> List[model.Endpoints]:
-        """Fetch all endpoints by ids."""
-        async with self.db:
-            result = await self.db.execute(select(model.Endpoints).order_by(model.Endpoints.created_at)
-                                           .where(model.Endpoints.id.in_(ids)))
-            return result.scalars().all()
-
-    async def get_all_with_latest_log_status(self, ids: List[int] = None):
+    async def get_all_with_latest_log_status(self, page: int, per_page: int, search_query: str,
+                                             user_endpoints: dict = None,
+                                             is_admin: bool = False) -> List[model.Endpoints]:
         """Fetch all endpoints with their latest log status."""
         async with self.db:
             try:
-                # Fetch all endpoints
-                if ids:
-                    endpoints = await self.get_all_by_ids(ids)
-                else:
-                    endpoints = await self.get_all()
+                endpoints = await self._fetch_endpoints_with_filter(page, per_page, search_query,
+                                                                    user_endpoints, is_admin)
 
-                # Fetch the latest log status for each endpoint
-                for endpoint in endpoints:
-                    if endpoint.log_table:
-                        log_table_name = f"log.{endpoint.log_table}"
-                        latest_log_result = await self.db.execute(
-                            select(text('status'))
-                            .select_from(text(log_table_name))
-                            .order_by(text('created_at DESC'))
-                            .limit(1)
-                        )
-                        latest_log = latest_log_result.scalar()
-                        endpoint.status = latest_log
-
+                self._apply_permissions(endpoints, user_endpoints)
                 return endpoints
             except Exception as e:
                 await self.db.rollback()
                 raise e
+
+    async def _fetch_endpoints_with_filter(self, page: int, per_page: int, search_query: str,
+                                           user_endpoints: dict, is_admin: bool) -> List[model.Endpoints]:
+        """Fetch endpoints based on given criteria."""
+        query = select(model.Endpoints).join(model.EndpointsStatus)
+
+        if not is_admin and not user_endpoints:
+            return []
+        if not is_admin:
+            query = query.where(model.Endpoints.id.in_(user_endpoints.keys()))
+
+        if search_query:
+            search_filter = or_(
+                model.Endpoints.name.ilike(f"%{search_query}%"),
+                model.Endpoints.description.ilike(f"%{search_query}%"),
+                model.Endpoints.url.ilike(f"%{search_query}%"),
+                model.Endpoints.response.cast(String).ilike(f"%{search_query}%"),
+                model.EndpointsStatus.status.ilike(f"%{search_query}%")
+            )
+            query = query.where(search_filter)
+
+        query = query.order_by(model.Endpoints.created_at).offset((page - 1) * per_page).limit(per_page)
+
+        result = await self.db.execute(query)
+        return result.scalars().all()
+
+    def _apply_permissions(self, endpoints: List[model.Endpoints], user_endpoints: Dict[int, dict] = None) -> None:
+        """Apply permissions to endpoints."""
+        for endpoint in endpoints:
+            if user_endpoints and endpoint.id in user_endpoints:
+                endpoint.permission = user_endpoints[endpoint.id]["permissions"]
+            else:
+                endpoint.permission = EndpointPermissions.UPDATE.value
 
     async def get_by_id(self, endpoint_id: int) -> model.Endpoints:
         """Fetch a specific endpoint by its ID."""
@@ -66,25 +73,18 @@ class EndpointDAO:
             result = await self.db.execute(select(model.Endpoints).where(model.Endpoints.id == endpoint_id))
             return result.scalars().first()
 
-    async def get_by_id_with_latest_log_status(self, endpoint_id: int, before: datetime = None, after: datetime = None,
-                        full: bool = False) -> model.Endpoints:
+    async def get_by_id_with_latest_log_status(self, endpoint_id: int, user_endpoints: dict = None) -> model.Endpoints:
         """Fetch a specific endpoint by its ID."""
         async with self.db:
-            result = await self.db.execute(select(model.Endpoints).where(model.Endpoints.id == endpoint_id))
+            result = await self.db.execute(select(model.Endpoints)
+                                           .join(model.EndpointsStatus).where(model.Endpoints.id == endpoint_id))
             endpoint = result.scalars().first()
 
-            if endpoint and endpoint.log_table:
-                log_table_name = f"log.{endpoint.log_table}"
+            if user_endpoints:
+                endpoint.permission = user_endpoints[endpoint.id]["permissions"]
+                return endpoint
 
-                latest_log_result = await self.db.execute(
-                    select(text('status'))
-                    .select_from(text(log_table_name))
-                    .order_by(text('created_at DESC'))
-                    .limit(1)
-                )
-                latest_log = latest_log_result.scalar()
-                endpoint.status = latest_log
-
+            endpoint.permission = EndpointPermissions.UPDATE.value
             return endpoint
 
     async def update(self, endpoint_id: int, updated_data) -> model.Endpoints:
@@ -131,10 +131,12 @@ class EndpointDAO:
                 await self.db.rollback()
                 raise e
 
-    async def assign_endpoint_to_user(self, endpoint_id: int, user_id: int):
+    async def assign_endpoint_to_user(self, endpoint_id: int, user_id: int, permissions: str):
+        """Assign user to endpoint with specific permissions."""
         user_endpoint = model.UserEndpoints(
             user_id=user_id,
-            endpoint_id=endpoint_id
+            endpoint_id=endpoint_id,
+            permissions=permissions
         )
         try:
             async with self.db:
@@ -150,3 +152,24 @@ class EndpointDAO:
                 # Handle other types of IntegrityError (foreign key, etc.) as needed
                 await self.db.rollback()
                 raise e
+
+    async def count_total_invoices(self, search_query: str = None, user_endpoints: dict = None):
+        """Count the total number of endpoints in the database."""
+        async with self.db:
+            query = select(func.count()).select_from(model.Endpoints)
+            if user_endpoints:
+                query = query.where(model.Endpoints.id.in_(user_endpoints.keys()))
+
+            if search_query:
+                search_filter = or_(
+                    model.Endpoints.name.ilike(f"%{search_query}%"),
+                    model.Endpoints.description.ilike(f"%{search_query}%"),
+                    model.Endpoints.url.ilike(f"%{search_query}%"),
+                    model.Endpoints.response.cast(String).ilike(f"%{search_query}%"),
+                    model.EndpointsStatus.status.ilike(f"%{search_query}%")
+                )
+                query = query.join(model.EndpointsStatus).where(search_filter)
+
+            result = await self.db.execute(query)
+            count = result.scalar()
+            return count

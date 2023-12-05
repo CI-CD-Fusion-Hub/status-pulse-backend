@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+from app.utils.enums import EndpointPermissions
 
 
 class CreateToken(BaseModel):
@@ -12,3 +14,13 @@ class CreateToken(BaseModel):
 
 class CreateTokenBody(BaseModel):
     expiration: int
+    permissions: str
+
+    @field_validator("permissions")
+    def check_order_status(cls, permissions):
+        """Validates Permissions."""
+        if permissions in (ep.value for ep in EndpointPermissions):
+            return permissions
+        raise ValueError(
+            f"{permissions} is not a valid permissions for endpoint. Valid status are: "
+            f"{', '.join(ep.value for ep in EndpointPermissions)}")

@@ -86,6 +86,7 @@ class CreateEndpointInDb(CreateEndpoint):
 class BaseEndpointsOut(CreateEndpointInDb):
     id: int
     status: str | None
+    permission: str | None
 
 
 class EndpointsOut(BaseEndpointsOut):

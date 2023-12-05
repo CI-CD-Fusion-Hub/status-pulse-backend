@@ -3,6 +3,7 @@ from datetime import datetime
 import jwt
 
 from app.config.config import Settings
+from app.schemas.shared_tokens_sch import CreateTokenBody
 from app.utils.logger import Logger
 
 token_config = Settings().token
@@ -11,14 +12,15 @@ LOGGER = Logger().start_logger()
 
 class TokenManager:
     @staticmethod
-    def generate_share_token(endpoint_id: int, timestamp: int):
+    def generate_share_token(endpoint_id: int, token_cfg: CreateTokenBody):
         secret_key = token_config['secret']
-        expiration_time = datetime.fromtimestamp(timestamp)
+        expiration_time = datetime.fromtimestamp(token_cfg.expiration)
 
         token = jwt.encode(
             {
                 'exp': expiration_time,
-                'endpoint_id': endpoint_id
+                'endpoint_id': endpoint_id,
+                'permissions': token_cfg.permissions
             },
             secret_key, algorithm='HS256')
 
