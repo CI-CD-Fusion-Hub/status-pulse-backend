@@ -87,12 +87,11 @@ async def update_endpoint(request: Request, endpoint_id: int, endpoint_data: Upd
     return await endpoint_service.update_endpoint(request, endpoint_id, endpoint_data)
 
 
-# @router.post("/endpoints/{endpoint_id}/notifications", tags=["endpoints"])
-# @auth_required
-# async def assign_notifications_to_endpoint(request: Request, endpoint_id: int, notification_ids: List[int],
-#                                            endpoint_service: EndpointService = Depends(
-#                                            create_endpoint_service)) -> BaseEndpointsOut:
-#     return await endpoint_service.upsert_notifications_to_endpoint(request, endpoint_id, notification_ids)
+@router.get("/endpoints/{endpoint_id}/notifications", tags=["endpoints"])
+@auth_required
+async def get_endpoint_notifications(request: Request, endpoint_id: int, endpoint_service: EndpointService = Depends(
+                                         create_endpoint_service)) -> BaseEndpointsOut:
+    return await endpoint_service.get_endpoint_notifications(request, endpoint_id)
 
 
 @router.delete("/endpoints/{endpoint_id}", tags=["endpoints"])

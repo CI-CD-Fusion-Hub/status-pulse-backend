@@ -6,11 +6,12 @@ from fastapi import Request, status
 
 from app.daos.endpoints_dao import EndpointDAO, DuplicateEndpointError
 from app.daos.log_table_dao import LogTableDAO
+from app.daos.notification_table_dao import NotificationTableDAO
 from app.daos.shared_tokens_dao import SharedTokenDAO
 from app.exceptions.custom_http_expeption import CustomHTTPException
-from app.models.db_models import create_log_table
+from app.models.db_models import create_log_table, create_notification_table
 from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, \
-    EndpointsOut, EndpointLogs, BaseEndpointLogs
+    EndpointsOut, EndpointLogs, BaseEndpointLogs, EndpointNotificationLogs
 from app.schemas.shared_tokens_sch import CreateToken, CreateTokenBody
 from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus, EndpointPermissions
 from app.utils.logger import Logger
@@ -24,6 +25,7 @@ class EndpointService:
     def __init__(self):
         self.endpoint_dao = EndpointDAO()
         self.log_table_dao = LogTableDAO()
+        self.notification_table_dao = NotificationTableDAO()
         self.shared_token_dao = SharedTokenDAO()
 
     @classmethod
@@ -37,7 +39,7 @@ class EndpointService:
         return table_name
 
     @classmethod
-    async def _validate_admin_access(cls, request: Request, endpoint_id: int):
+    def _validate_access(cls, request: Request, endpoint_id: int):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
         user_endpoints_with_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
 
@@ -49,7 +51,7 @@ class EndpointService:
         LOGGER.info(f"User access validated for endpoint with ID {endpoint_id}.")
 
     @classmethod
-    async def _validate_user_rights(cls, request: Request, endpoint_id: int):
+    def _validate_user_rights(cls, request: Request, endpoint_id: int):
         user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
         user_endpoints_with_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
 
@@ -59,7 +61,12 @@ class EndpointService:
             raise CustomHTTPException(detail="You do not have permissions to perform this actions.",
                                       status_code=status.HTTP_400_BAD_REQUEST)
 
-    async def is_endpoint_exist(self, endpoint_id: int):
+    @classmethod
+    def _is_admin(cls, request: Request):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        return False if user_access_level != AccessLevel.ADMIN.value else True
+
+    async def _get_endpoint(self, endpoint_id: int):
         endpoint = await self.endpoint_dao.get_by_id(endpoint_id)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
@@ -95,7 +102,6 @@ class EndpointService:
     async def get_all(self, request: Request, page: int = 1, per_page: int = 5, search_query: str = None):
         endpoints, total_count = await self.fetch_endpoints(request, page, per_page, search_query)
 
-
         if not endpoints:
             LOGGER.info("No endpoints found in the database.")
             return ok(message="No endpoints found.", data=[])
@@ -105,7 +111,7 @@ class EndpointService:
             endpoint_rsp = BaseEndpointsOut.model_validate(e.as_dict())
 
             endpoint_rsp.notifications = [{"id": n.notification.id, "name": n.notification.name}
-                     for n in e.notifications]
+                                          for n in e.notifications]
             endpoints_rsp.append(endpoint_rsp)
 
         LOGGER.info(f"Retrieved {len(endpoints)} endpoints.")
@@ -119,10 +125,12 @@ class EndpointService:
         )
 
     async def get_by_id(self, request: Request, endpoint_id: int):
-        await self._validate_admin_access(request, endpoint_id)
+        self._validate_access(request, endpoint_id)
         user_endpoints_with_perm = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
 
-        endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id, user_endpoints_with_perm)
+        is_admin = self._is_admin(request)
+        endpoint = await self.endpoint_dao.get_by_id_with_latest_log_status(endpoint_id, user_endpoints_with_perm,
+                                                                            is_admin)
         if not endpoint:
             LOGGER.warning(f"Endpoint with ID {endpoint_id} not found.")
             return error(message=f"Endpoint with ID {endpoint_id} does not exist.",
@@ -136,10 +144,8 @@ class EndpointService:
                   data=endpoint_rsp)
 
     async def get_status_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 24):
-        await self._validate_admin_access(request, endpoint_id)
-        endpoint = await self.is_endpoint_exist(endpoint_id)
-
-        endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())
+        self._validate_access(request, endpoint_id)
+        endpoint = await self._get_endpoint(endpoint_id)
 
         if endpoint.log_table:
             log_records = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, hours)
@@ -154,14 +160,15 @@ class EndpointService:
                 ) for log in log_records
             ]
 
-            endpoint_data.logs = [record for record in updated_logs]
+            return ok(message="Successfully provided status graph for endpoint.",
+                      data=updated_logs)
 
-        return ok(message="Successfully provided status graph for endpoint.",
-                  data=endpoint_data.logs)
+        return ok(message="No logs found.",
+                  data=[])
 
     async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 72):
-        await self._validate_admin_access(request, endpoint_id)
-        endpoint = await self.is_endpoint_exist(endpoint_id)
+        self._validate_access(request, endpoint_id)
+        endpoint = await self._get_endpoint(endpoint_id)
 
         hourly_logs = []
 
@@ -235,6 +242,7 @@ class EndpointService:
             endpoint.status = None
             await self.endpoint_dao.register_endpoint_status(endpoint.id, endpoint.status)
             await create_log_table(log_table)
+            await create_notification_table(log_table)
 
             if endpoint_data.notifications:
                 await self._upsert_notifications_to_endpoint(request, endpoint.id, endpoint_data.notifications)
@@ -250,9 +258,9 @@ class EndpointService:
             return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
 
     async def update_endpoint(self, request: Request, endpoint_id: int, endpoint_data: UpdateEndpoint):
-        await self._validate_admin_access(request, endpoint_id)
-        await self.is_endpoint_exist(endpoint_id)
-        await self._validate_user_rights(request, endpoint_id)
+        self._validate_access(request, endpoint_id)
+        await self._get_endpoint(endpoint_id)
+        self._validate_user_rights(request, endpoint_id)
 
         data_to_update = endpoint_data.model_dump()
         data_to_update = {k: v for k, v in data_to_update.items() if v is not None and k != 'notifications'}
@@ -268,20 +276,22 @@ class EndpointService:
         return ok(message="Successfully updated endpoint.", data=endpoint_response)
 
     async def delete_endpoint(self, request: Request, endpoint_id: int):
-        await self._validate_admin_access(request, endpoint_id)
-        endpoint = await self.is_endpoint_exist(endpoint_id)
-        await self._validate_user_rights(request, endpoint_id)
+        self._validate_access(request, endpoint_id)
+        endpoint = await self._get_endpoint(endpoint_id)
+        self._validate_user_rights(request, endpoint_id)
 
         await self.endpoint_dao.delete(endpoint_id)
 
         await self.log_table_dao.delete_log_table(endpoint.log_table)
+        await self.notification_table_dao.delete_log_table(endpoint.log_table)
+
         LOGGER.info(f"Endpoint with ID {endpoint_id} has been successfully deleted.")
         return ok(message="Endpoint has been successfully deleted.")
 
     async def share_endpoint(self, request, endpoint_id: int, token_cfg: CreateTokenBody):
-        await self._validate_admin_access(request, endpoint_id)
-        await self.is_endpoint_exist(endpoint_id)
-        await self._validate_user_rights(request, endpoint_id)
+        self._validate_access(request, endpoint_id)
+        await self._get_endpoint(endpoint_id)
+        self._validate_user_rights(request, endpoint_id)
 
         token = TokenManager.generate_share_token(endpoint_id, token_cfg)
         await self.shared_token_dao.create(
@@ -323,8 +333,8 @@ class EndpointService:
 
     async def get_uptime_logs_by_interval(self, request: Request, endpoint_id: int, date_from: datetime,
                                           date_to: datetime, full: bool):
-        await self._validate_admin_access(request, endpoint_id)
-        endpoint = await self.is_endpoint_exist(endpoint_id)
+        self._validate_access(request, endpoint_id)
+        endpoint = await self._get_endpoint(endpoint_id)
 
         endpoint_data = EndpointsOut.model_validate(endpoint.as_dict())
 
@@ -357,3 +367,25 @@ class EndpointService:
         await self.endpoint_dao.delete_assigned_notifications(endpoint_id)
         await self.endpoint_dao.assign_notifications(endpoint_id, notification_ids)
         LOGGER.info(f"Successfully added notification to endpoint ID {endpoint_id}.")
+
+    async def get_endpoint_notifications(self, request: Request, endpoint_id: int, hours: int = 72):
+        self._validate_access(request, endpoint_id)
+        endpoint = await self._get_endpoint(endpoint_id)
+
+        if endpoint.log_table:
+            log_records = await self.notification_table_dao.select_logs_from_last_hours(endpoint.log_table, hours)
+
+            updated_logs = [
+                EndpointNotificationLogs(
+                    id=log.id, endpoint_id=log.endpoint_id, notification_id=log.notification_id,
+                    notification_name=log.notification_name, notification_type=log.notification_type,
+                    response=log.response, status=log.status,
+                    created_at=int(log.created_at.replace(tzinfo=timezone.utc).timestamp())
+                    ) for log in log_records
+            ]
+
+            return ok(message="Successfully provided status graph for endpoint.",
+                      data=updated_logs)
+
+        return ok(message="No logs found.",
+                  data=[])

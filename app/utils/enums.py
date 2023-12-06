@@ -4,6 +4,7 @@ from enum import Enum
 class DatabaseSchemas(Enum):
     CONFIG_SCHEMA = 'config'
     LOG_SCHEMA = 'log'
+    NOTIFICATION_SCHEMA = 'notification'
 
 
 class AccessLevel(Enum):

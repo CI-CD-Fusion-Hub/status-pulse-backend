@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey, Boolean, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
@@ -215,23 +215,41 @@ class EndpointNotifications(Base):
         }
 
 
-async def create_log_table(table_name: str):
-    log_table = Table(
-        table_name, Base.metadata,
-        Column('id', Integer, primary_key=True, autoincrement=True),
-        Column('status', String),
-        Column('endpoint_id', Integer,
-               ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id", ondelete='CASCADE'), nullable=True),
-        Column('created_at', TIMESTAMP, default=func.now()),
-        Column('response', JSONB),
-        Column('response_time', Integer),
-        schema=DatabaseSchemas.LOG_SCHEMA.value
-    )
+async def create_table(table_name: str, schema: DatabaseSchemas, columns: List[Column]):
+    # Create the table with specified columns
+    new_table = Table(table_name, Base.metadata, *columns, schema=schema.value)
 
     # Generate the SQL statement for table creation
-    create_table_stmt = CreateTable(log_table)
+    create_table_stmt = CreateTable(new_table)
 
     # Use the async session to execute the table creation
     async with SessionLocal() as session:
         await session.execute(create_table_stmt)
         await session.commit()
+
+
+async def create_log_table(table_name: str):
+    columns = [
+        Column('id', Integer, primary_key=True, autoincrement=True),
+        Column('status', String),
+        Column('endpoint_id', Integer,
+               ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id", ondelete='CASCADE')),
+        Column('created_at', TIMESTAMP, default=func.now()),
+        Column('response', JSONB),
+        Column('response_time', Integer)
+    ]
+    await create_table(table_name, DatabaseSchemas.LOG_SCHEMA, columns)
+
+
+async def create_notification_table(table_name: str):
+    columns = [
+        Column('id', Integer, primary_key=True, autoincrement=True),
+        Column('status', String),
+        Column('endpoint_id', Integer,
+               ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id", ondelete='CASCADE')),
+        Column('notification_id', Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.notifications.id",
+                                                      ondelete='CASCADE')),
+        Column('created_at', TIMESTAMP, default=func.now()),
+        Column('response', String)
+    ]
+    await create_table(table_name, DatabaseSchemas.NOTIFICATION_SCHEMA, columns)

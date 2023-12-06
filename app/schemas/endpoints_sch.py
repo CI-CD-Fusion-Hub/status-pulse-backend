@@ -109,6 +109,15 @@ class EndpointLogs(BaseEndpointLogs):
     response_time: int
 
 
+class EndpointNotificationLogs(BaseEndpointLogs):
+    id: int
+    endpoint_id: int
+    notification_id: int
+    notification_name: str
+    notification_type: str
+    response: str
+
+
 class CreateEndpointInDb(CreateEndpoint):
     log_table: str
 

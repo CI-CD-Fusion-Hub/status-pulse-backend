@@ -81,7 +81,8 @@ class EndpointDAO:
             result = await self.db.execute(select(model.Endpoints).where(model.Endpoints.id == endpoint_id))
             return result.scalars().first()
 
-    async def get_by_id_with_latest_log_status(self, endpoint_id: int, user_endpoints: dict = None) -> model.Endpoints:
+    async def get_by_id_with_latest_log_status(self, endpoint_id: int, user_endpoints: dict, is_admin: bool) \
+            -> model.Endpoints:
         """Fetch a specific endpoint by its ID."""
         async with self.db:
             result = await self.db.execute(select(model.Endpoints)
@@ -91,11 +92,14 @@ class EndpointDAO:
                                            .where(model.Endpoints.id == endpoint_id))
             endpoint = result.scalars().first()
 
-            if len(user_endpoints.keys()) > 0:
-                endpoint.permission = user_endpoints[endpoint.id]["permissions"]
-            else:
-                endpoint.permission = EndpointPermissions.UPDATE.value
+            if not endpoint:
+                return {}
 
+            if is_admin:
+                endpoint.permission = EndpointPermissions.UPDATE.value
+                return endpoint
+
+            endpoint.permission = user_endpoints[endpoint.id]["permissions"]
             return endpoint
 
     async def update(self, endpoint_id: int, updated_data) -> model.Endpoints:
