@@ -1,11 +1,9 @@
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
-from sqlalchemy import text, select, and_
+from sqlalchemy import text
 
-from app.models.db_models import get_notification_table_orm
 from app.utils import database
-from app.models import db_models as model
 from app.utils.enums import DatabaseSchemas
 from app.utils.logger import Logger
 
