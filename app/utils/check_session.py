@@ -30,12 +30,15 @@ def auth_required(function_to_protect):
         endpoints_perm = {endpoint.endpoint.id: {"permissions": endpoint.permissions}
                           for endpoint in user.endpoints if endpoint.endpoint}
         notifications = [notification.id for notification in user.notifications]
+        dashboards = [dashboard.id for dashboard in user.dashboards]
 
         request.session[SessionAttributes.USER_INFO.value] = user.as_dict()
         request.session[SessionAttributes.USER_ACCESS_LEVEL.value] = user.access_level
         request.session[SessionAttributes.USER_ID.value] = user.id
         request.session[SessionAttributes.USER_ENDPOINTS_PERM.value] = endpoints_perm
         request.session[SessionAttributes.USER_NOTIFICATIONS.value] = notifications
+        request.session[SessionAttributes.USER_DASHBOARDS.value] = dashboards
+
         return await function_to_protect(request, *args, **kwargs)
 
     return wrapper

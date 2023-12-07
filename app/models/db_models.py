@@ -25,6 +25,7 @@ class Users(Base):
 
     endpoints = relationship("UserEndpoints", back_populates="user")
     notifications = relationship("Notifications", back_populates="user")
+    dashboards = relationship("Dashboards", back_populates="user")
 
     def as_dict(self):
         return {
@@ -215,14 +216,64 @@ class EndpointNotifications(Base):
         }
 
 
+class Dashboards(Base):
+    __tablename__ = "dashboards"
+    __table_args__ = (
+        UniqueConstraint('user_id', 'name', name='duin_user_id_name'),
+        {'schema': DatabaseSchemas.CONFIG_SCHEMA.value},
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.users.id", ondelete='CASCADE'))
+    uuid = Column(String, unique=True)
+    name = Column(String)
+    description = Column(String)
+    scope = Column(String)
+    created_at = Column(TIMESTAMP, default=func.now())
+
+    user = relationship("Users", back_populates="dashboards")
+    endpoints = relationship("DashboardEndpoints", back_populates="dashboard")
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'uuid': self.uuid,
+            'name': self.name,
+            'description': self.description,
+            'scope': self.scope,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class DashboardEndpoints(Base):
+    __tablename__ = "dashboard_endpoints"
+    __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
+
+    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id",
+                                             ondelete='CASCADE'), primary_key=True)
+    dashboard_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.dashboards.id",
+                                              ondelete='CASCADE'), primary_key=True)
+    created_at = Column(TIMESTAMP, default=func.now())
+    position = Column(Integer)
+
+    endpoint = relationship("Endpoints", uselist=False)
+    dashboard = relationship("Dashboards", uselist=False, back_populates="endpoints")
+
+    def as_dict(self):
+        return {
+            'endpoint_id': self.endpoint_id,
+            'dashboard_id': self.notification_id,
+            'position': self.position,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
 async def create_table(table_name: str, schema: DatabaseSchemas, columns: List[Column]):
-    # Create the table with specified columns
     new_table = Table(table_name, Base.metadata, *columns, schema=schema.value)
 
-    # Generate the SQL statement for table creation
     create_table_stmt = CreateTable(new_table)
 
-    # Use the async session to execute the table creation
     async with SessionLocal() as session:
         await session.execute(create_table_stmt)
         await session.commit()

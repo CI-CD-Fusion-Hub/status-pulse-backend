@@ -20,7 +20,7 @@ def create_endpoint_service():
 @auth_required
 async def get_all(request: Request,
                   page: int = Query(1, gt=0),
-                  per_page: int = Query(5, gt=0, le=50),
+                  per_page: int = Query(10, gt=0, le=50),
                   search: str = Query(None),
                   endpoint_service: EndpointService = Depends(create_endpoint_service)) -> EndpointsOut:
     return await endpoint_service.get_all(request, page, per_page, search)

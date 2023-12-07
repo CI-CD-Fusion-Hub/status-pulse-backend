@@ -44,7 +44,8 @@ class UserDAO:
                 select(model.Users)
                 .options(
                     joinedload(model.Users.endpoints).joinedload(model.UserEndpoints.endpoint),
-                    joinedload(model.Users.notifications)
+                    joinedload(model.Users.notifications),
+                    joinedload(model.Users.dashboards)
                 )
                 .where(model.Users.email == email)
             )

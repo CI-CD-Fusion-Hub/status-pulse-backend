@@ -99,7 +99,7 @@ class EndpointService:
         total_count = await self.endpoint_dao.count_total_invoices(search_query=search_query)
         return endpoints, total_count
 
-    async def get_all(self, request: Request, page: int = 1, per_page: int = 5, search_query: str = None):
+    async def get_all(self, request: Request, page: int = 1, per_page: int = 10, search_query: str = None):
         endpoints, total_count = await self.fetch_endpoints(request, page, per_page, search_query)
 
         if not endpoints:
@@ -239,7 +239,7 @@ class EndpointService:
             await self.endpoint_dao.assign_endpoint_to_user(endpoint.id,
                                                             request.session.get(SessionAttributes.USER_ID.value),
                                                             EndpointPermissions.UPDATE.value)
-            endpoint.status = None
+            endpoint.status = EndpointStatus.MEASURING.value
             await self.endpoint_dao.register_endpoint_status(endpoint.id, endpoint.status)
             await create_log_table(log_table)
             await create_notification_table(log_table)

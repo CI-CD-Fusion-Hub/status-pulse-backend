@@ -18,6 +18,7 @@ class UserStatus(Enum):
 
 
 class EndpointStatus(Enum):
+    MEASURING = 'measuring'
     UNHEALTHY = 'unhealthy'
     HEALTHY = 'healthy'
     DEGRADED = 'degraded'
@@ -27,6 +28,11 @@ class EndpointStatus(Enum):
 class EndpointPermissions(Enum):
     VIEW = 'View'
     UPDATE = 'Update'
+
+
+class DashboardScopes(Enum):
+    PUBLIC = 'Public'
+    PRIVATE = 'Private'
 
 
 class AuthMethods(Enum):
@@ -44,3 +50,5 @@ class SessionAttributes(Enum):
     USER_INFO = 'user_info'
     USER_ENDPOINTS_PERM = 'user_endpoints_perm'
     USER_NOTIFICATIONS = 'user_notifications'
+    USER_DASHBOARDS = 'user_dashboards'
+
