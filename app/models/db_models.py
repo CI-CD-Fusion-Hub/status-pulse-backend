@@ -254,8 +254,12 @@ class DashboardEndpoints(Base):
                                              ondelete='CASCADE'), primary_key=True)
     dashboard_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.dashboards.id",
                                               ondelete='CASCADE'), primary_key=True)
+
     created_at = Column(TIMESTAMP, default=func.now())
     position = Column(Integer)
+    type = Column(String)
+    duration = Column(Integer)
+    unit = Column(String)
 
     endpoint = relationship("Endpoints", uselist=False)
     dashboard = relationship("Dashboards", uselist=False, back_populates="endpoints")
@@ -263,8 +267,11 @@ class DashboardEndpoints(Base):
     def as_dict(self):
         return {
             'endpoint_id': self.endpoint_id,
-            'dashboard_id': self.notification_id,
+            'dashboard_id': self.dashboard_id,
             'position': self.position,
+            'type': self.type,
+            'duration': self.duration,
+            'unit': self.unit,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

@@ -1,5 +1,5 @@
 import uuid
-from datetime import timedelta, datetime, timezone
+from datetime import datetime, timezone
 from typing import List
 
 from fastapi import Request, status
@@ -11,9 +11,10 @@ from app.daos.shared_tokens_dao import SharedTokenDAO
 from app.exceptions.custom_http_expeption import CustomHTTPException
 from app.models.db_models import create_log_table, create_notification_table
 from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEndpointInDb, UpdateEndpoint, \
-    EndpointsOut, EndpointLogs, BaseEndpointLogs, EndpointNotificationLogs
+    EndpointsOut, EndpointLogs, EndpointNotificationLogs
 from app.schemas.shared_tokens_sch import CreateToken, CreateTokenBody
-from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus, EndpointPermissions
+from app.utils.chart_processor import ChartProcessor
+from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus, EndpointPermissions, DashboardChartUnits
 from app.utils.logger import Logger
 from app.utils.response import ok, error
 from app.utils.token_manager import TokenManager
@@ -25,6 +26,7 @@ class EndpointService:
     def __init__(self):
         self.endpoint_dao = EndpointDAO()
         self.log_table_dao = LogTableDAO()
+        self.chart_processor = ChartProcessor()
         self.notification_table_dao = NotificationTableDAO()
         self.shared_token_dao = SharedTokenDAO()
 
@@ -143,78 +145,26 @@ class EndpointService:
         return ok(message="Successfully provided endpoint.",
                   data=endpoint_rsp)
 
-    async def get_status_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 24):
+    async def get_status_graph_by_id(self, request: Request, endpoint_id: int, duration: int = 24):
         self._validate_access(request, endpoint_id)
         endpoint = await self._get_endpoint(endpoint_id)
 
-        if endpoint.log_table:
-            log_records = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, hours)
-            updated_logs = [
-                EndpointLogs(
-                    id=log.id,
-                    endpoint_id=log.endpoint_id,
-                    response=log.response,
-                    response_time=log.response_time,
-                    status=log.status,
-                    created_at=int(log.created_at.replace(tzinfo=timezone.utc).timestamp())
-                ) for log in log_records
-            ]
+        if not endpoint.log_table:
+            return ok(message="No logs found.", data=[])
 
-            return ok(message="Successfully provided status graph for endpoint.",
-                      data=updated_logs)
+        updated_logs = await self.chart_processor.process_bar_chart(endpoint, DashboardChartUnits.HOURS.value, duration)
 
-        return ok(message="No logs found.",
-                  data=[])
+        return ok(message="Successfully provided status graph for endpoint.",
+                  data=updated_logs)
 
-    async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int, hours: int = 72):
+    async def get_uptime_graph_by_id(self, request: Request, endpoint_id: int, duration: int = 72):
         self._validate_access(request, endpoint_id)
         endpoint = await self._get_endpoint(endpoint_id)
+        if not endpoint.log_table:
+            return ok(message="No logs found.", data=[])
 
-        hourly_logs = []
-
-        if endpoint.log_table:
-            logs = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, hours)
-
-            current_time = datetime.now()
-            rounded_time = current_time + timedelta(hours=1)
-            end_time = rounded_time.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(
-                tzinfo=None)
-            start_time = end_time - timedelta(hours=hours)
-
-            for hour in range(hours):
-                current_hour_start = start_time + timedelta(hours=hour)
-                next_hour_start = current_hour_start + timedelta(hours=1)
-
-                # Ensure the next_hour_start does not exceed the end_time
-                if next_hour_start > end_time:
-                    next_hour_start = end_time
-
-                logs_current_hour = [log._asdict() for log in logs
-                                     if current_hour_start <= log._asdict()['created_at'] < next_hour_start]
-
-                error_log = [log for log in logs_current_hour if log['status'] != 'healthy']
-
-                if len(error_log) >= 3:
-                    hourly_log = BaseEndpointLogs(
-                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at']
-                                       .replace(tzinfo=timezone.utc).timestamp()),
-                        status=EndpointStatus.DEGRADED.value)
-                elif 3 > len(error_log) > 0:
-                    hourly_log = BaseEndpointLogs(
-                        created_at=int(max(error_log, key=lambda log: log['created_at'])['created_at']
-                                       .replace(tzinfo=timezone.utc).timestamp()),
-                        status=EndpointStatus.UNHEALTHY.value)
-                elif logs_current_hour:
-                    hourly_log = BaseEndpointLogs(
-                        created_at=int(max(logs_current_hour, key=lambda log: log['created_at'])['created_at']
-                                       .replace(tzinfo=timezone.utc).timestamp()),
-                        status=EndpointStatus.HEALTHY.value)
-                else:
-                    hourly_log = BaseEndpointLogs(
-                        created_at=int(current_hour_start.replace(tzinfo=timezone.utc).timestamp()),
-                        status=EndpointStatus.NODATA.value)
-
-                hourly_logs.append(hourly_log)
+        hourly_logs = await self.chart_processor.process_uptime_chart(endpoint,
+                                                                      DashboardChartUnits.HOURS.value, duration)
 
         return ok(message="Successfully provided status graph for endpoint.",
                   data=hourly_logs)

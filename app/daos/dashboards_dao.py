@@ -1,14 +1,14 @@
 from typing import List
 
 from psycopg2 import errorcodes
-from sqlalchemy import select, update, delete
+from sqlalchemy import select, update, delete, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from app.schemas.dashboards_sch import CreateDashboard
+from app.models import db_models as model
+from app.schemas.dashboards_sch import CreateDashboard, DashboardEndpointCreate, DashboardEndpoint
 from app.utils import database
 from app.utils.logger import Logger
-from app.models import db_models as model
 
 LOGGER = Logger().start_logger()
 
@@ -41,12 +41,14 @@ class DashboardDAO:
     async def get_by_id(self, dashboard_id: int) -> model.Dashboards:
         """Fetch a specific dashboard by ID."""
         async with self.db:
-            result = await self.db.execute(select(model.Dashboards, model.DashboardEndpoints.position)
-                                           .options(selectinload(model.Dashboards.endpoints)
-                                                    .selectinload(model.DashboardEndpoints.endpoint))
-                                           .where(model.Dashboards.id == dashboard_id))
+            result = await self.db.execute(
+                select(model.Dashboards)
+                .options(selectinload(model.Dashboards.endpoints)
+                         .selectinload(model.DashboardEndpoints.endpoint))
+                .where(model.Dashboards.id == dashboard_id)
+            )
 
-            return result.scalars().first()
+        return result.scalars().first()
 
     async def get_by_uuid(self, dashboard_uuid: str) -> model.Dashboards:
         """Fetch a specific dashboard by ID."""
@@ -95,12 +97,19 @@ class DashboardDAO:
             await self.db.execute(delete(model.Dashboards).where(model.Dashboards.id == dashboard_id))
             await self.db.commit()
 
-    async def add_endpoint_to_dashboard(self, dashboard_id: int, endpoints: List[int]):
+    async def update_endpoints_in_dashboard(self, dashboard_id: int, endpoints_data: List[DashboardEndpoint]):
         """Add a list of endpoints to a specific dashboard."""
         try:
-            endpoints = [model.DashboardEndpoints(dashboard_id=dashboard_id, endpoint_id=endpoint_id)
-                         for endpoint_id in endpoints]
-
+            endpoints = [
+                model.DashboardEndpoints(
+                    dashboard_id=dashboard_id,
+                    endpoint_id=endpoint.id,
+                    position=position,
+                    type=endpoint.type,
+                    unit=endpoint.unit,
+                    duration=endpoint.duration
+                )
+                for position, endpoint in enumerate(endpoints_data)]
             async with self.db:
                 self.db.add_all(endpoints)
                 await self.db.commit()
@@ -121,3 +130,40 @@ class DashboardDAO:
                                   .where(model.DashboardEndpoints.dashboard_id == dashboard_id))
             await self.db.commit()
 
+    async def add_endpoint_to_dashboard(self, dashboard_id: int, endpoints_data: DashboardEndpointCreate,
+                                        first_available_position: int):
+        """Add a new endpoints to a specific dashboard."""
+        try:
+            endpoints = [
+                model.DashboardEndpoints(
+                    dashboard_id=dashboard_id,
+                    endpoint_id=endpoint_id,
+                    position=position,
+                    type=endpoints_data.type,
+                    unit=endpoints_data.unit,
+                    duration=endpoints_data.duration
+                )
+                for position, endpoint_id in enumerate(endpoints_data.endpoints, start=first_available_position)]
+
+            async with self.db:
+                self.db.add_all(endpoints)
+                await self.db.commit()
+        except IntegrityError as e:
+            if e.orig.pgcode == errorcodes.FOREIGN_KEY_VIOLATION \
+                    and 'is not present in table "endpoints"' in str(e.orig):
+                await self.db.rollback()
+                raise DashboardError("Dashboard have been created but some of the endpoints does not exist.")
+            else:
+                # Handle other types of IntegrityError (foreign key, etc.) as needed
+                await self.db.rollback()
+                raise e
+
+    async def get_next_position(self, dashboard_id: int) -> int:
+        max_position_query = select(func.max(model.DashboardEndpoints.position)).where(
+            model.DashboardEndpoints.dashboard_id == dashboard_id)
+
+        async with self.db:
+            result = await self.db.execute(max_position_query)
+            max_position = result.scalar()
+
+        return (max_position or 0) + 1

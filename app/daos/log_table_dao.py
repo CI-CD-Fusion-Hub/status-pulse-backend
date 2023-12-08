@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import text, select, and_
 
 from app.utils import database
-from app.utils.enums import DatabaseSchemas
+from app.utils.enums import DatabaseSchemas, DashboardChartUnits
 from app.utils.logger import Logger
 
 LOGGER = Logger().start_logger()
@@ -49,12 +49,17 @@ class LogTableDAO:
                 await self.db.rollback()
                 raise e
 
-    async def select_logs_from_last_hours(self, table_name: str, hours: int):
+    async def select_logs_from_last_hours(self, table_name: str, unit: str, duration: int):
         """Select records from a specific log table for the last 24 hours."""
         sanitized_table_name = self._sanitize_table_name(table_name)
-        twenty_four_hours_ago = datetime.now() - timedelta(hours=hours)
+        if unit == DashboardChartUnits.HOURS.value:
+            delta = datetime.now() - timedelta(hours=duration)
+        elif unit == DashboardChartUnits.DAY.value:
+            delta = datetime.now() - timedelta(days=duration)
+        else:
+            return []
         # Format the timestamp in a way that's compatible with your database
-        formatted_timestamp = twenty_four_hours_ago.strftime("%Y-%m-%d %H:%M:%S")
+        formatted_timestamp = delta.strftime("%Y-%m-%d %H:%M:%S")
 
         select_query = (
             f"SELECT * FROM {DatabaseSchemas.LOG_SCHEMA.value}.{sanitized_table_name} "

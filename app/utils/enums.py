@@ -35,6 +35,16 @@ class DashboardScopes(Enum):
     PRIVATE = 'Private'
 
 
+class DashboardChartTypes(Enum):
+    UPTIME = 'Uptime'
+    BAR_CHART = 'BarChart'
+
+
+class DashboardChartUnits(Enum):
+    HOURS = 'Hours'
+    DAY = 'Days'
+
+
 class AuthMethods(Enum):
     CAS = 'CAS'
     AAD = 'Azure AD'

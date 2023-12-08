@@ -2,7 +2,8 @@ from typing import List
 
 from fastapi import APIRouter, Depends, Request, Query
 
-from app.schemas.dashboards_sch import DashboardOut, CreateDashboard, UpdateDashboard
+from app.schemas.dashboards_sch import DashboardOut, CreateDashboard, UpdateDashboard, DashboardEndpoint, \
+    DashboardEndpointCreate
 from app.schemas.response_sch import Response
 from app.services.dashboards_srv import DashboardService
 from app.utils.check_session import auth_required
@@ -47,6 +48,20 @@ async def create(request: Request, dashboard_data: CreateDashboard,
 async def update(request: Request, dashboard_id: int, dashboard_data: UpdateDashboard,
                  dashboards_service: DashboardService = Depends(create_dashboard_service)) -> DashboardOut:
     return await dashboards_service.update_dashboard(request, dashboard_id, dashboard_data)
+
+
+@router.post("/dashboards/{dashboard_id}/endpoints", tags=["dashboards"])
+@auth_required
+async def add_endpoints(request: Request, dashboard_id: int, endpoints_data: DashboardEndpointCreate,
+                        dashboards_service: DashboardService = Depends(create_dashboard_service)) -> DashboardOut:
+    return await dashboards_service.add_endpoints_to_dashboard(request, dashboard_id, endpoints_data)
+
+
+@router.put("/dashboards/{dashboard_id}/endpoints", tags=["dashboards"])
+@auth_required
+async def add_endpoints(request: Request, dashboard_id: int, endpoints_order: List[DashboardEndpoint],
+                        dashboards_service: DashboardService = Depends(create_dashboard_service)) -> DashboardOut:
+    return await dashboards_service.update_endpoints_order(request, dashboard_id, endpoints_order)
 
 
 @router.delete("/dashboards/{dashboard_id}", tags=["dashboards"])
