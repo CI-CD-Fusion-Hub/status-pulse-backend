@@ -186,11 +186,11 @@ class EndpointService:
                 log_table=log_table)
 
             endpoint = await self.endpoint_dao.create(db_data)
+            endpoint.status = None
             await self.endpoint_dao.assign_endpoint_to_user(endpoint.id,
                                                             request.session.get(SessionAttributes.USER_ID.value),
                                                             EndpointPermissions.UPDATE.value)
-            endpoint.status = EndpointStatus.MEASURING.value
-            await self.endpoint_dao.register_endpoint_status(endpoint.id, endpoint.status)
+            await self.endpoint_dao.register_endpoint_status(endpoint.id, EndpointStatus.MEASURING.value)
             await create_log_table(log_table)
             await create_notification_table(log_table)
 
@@ -198,6 +198,7 @@ class EndpointService:
                 await self._upsert_notifications_to_endpoint(request, endpoint.id, endpoint_data.notifications)
 
             endpoint_response = BaseEndpointsOut.model_validate(endpoint.as_dict())
+            endpoint_response.status = EndpointStatus.MEASURING.value
             endpoint_response.notifications = endpoint_data.notifications
             return ok(
                 message="Successfully created endpoint.",
