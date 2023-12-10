@@ -250,10 +250,10 @@ class DashboardEndpoints(Base):
     __tablename__ = "dashboard_endpoints"
     __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
 
-    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id",
-                                             ondelete='CASCADE'), primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id", ondelete='CASCADE'))
     dashboard_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.dashboards.id",
-                                              ondelete='CASCADE'), primary_key=True)
+                                              ondelete='CASCADE'))
 
     created_at = Column(TIMESTAMP, default=func.now())
     position = Column(Integer)
