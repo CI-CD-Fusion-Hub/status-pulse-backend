@@ -2,7 +2,7 @@ from datetime import timezone, datetime, timedelta
 
 from app.daos.log_table_dao import LogTableDAO
 from app.schemas.endpoints_sch import EndpointLogs, BaseEndpointLogs
-from app.utils.enums import EndpointStatus
+from app.utils.enums import EndpointStatus, DashboardChartUnits
 from app.models import db_models as model
 
 
@@ -28,13 +28,22 @@ class ChartProcessor:
         logs = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, unit, duration)
 
         current_time = datetime.now()
-        rounded_time = current_time + timedelta(hours=1)
-        end_time = rounded_time.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
-        start_time = end_time - timedelta(hours=duration)
+        if unit == DashboardChartUnits.HOURS.value:
+            rounded_time = current_time + timedelta(hours=1)
+            end_time = rounded_time.replace(minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
+            start_time = end_time - timedelta(hours=duration)
+        else:
+            rounded_time = current_time + timedelta(days=1)
+            end_time = rounded_time.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc).replace(tzinfo=None)
+            start_time = end_time - timedelta(days=duration)
 
-        for hour in range(duration):
-            current_hour_start = start_time + timedelta(hours=hour)
-            next_hour_start = current_hour_start + timedelta(hours=1)
+        for d in range(duration):
+            if unit == DashboardChartUnits.HOURS.value:
+                current_hour_start = start_time + timedelta(hours=d)
+                next_hour_start = current_hour_start + timedelta(hours=1)
+            else:
+                current_hour_start = start_time + timedelta(days=d)
+                next_hour_start = current_hour_start + timedelta(days=1)
 
             if next_hour_start > end_time:
                 next_hour_start = end_time

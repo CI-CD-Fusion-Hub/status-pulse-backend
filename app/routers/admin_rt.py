@@ -17,7 +17,6 @@ def create_endpoint_service():
 #############
 # Endpoints #
 #############
-
 @router.get("/admin/endpoints", tags=["admin"])
 @auth_required
 @admin_access_required
