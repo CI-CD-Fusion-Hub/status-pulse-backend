@@ -5,8 +5,7 @@ from app.schemas.users_sch import ValidatorUtils
 
 
 class RegisterUser(BaseModel):
-    first_name: str
-    last_name: str
+    name: str
     email: str
     confirm_password: str
     password: str
@@ -14,8 +13,7 @@ class RegisterUser(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "first_name": "First Name",
-                "last_name": "Last Name",
+                "name": "Test Username",
                 "email": "sampleemail@co.com",
                 "password": "Dummy@pass123",
                 "confirm_password": "Dummy@pass123"

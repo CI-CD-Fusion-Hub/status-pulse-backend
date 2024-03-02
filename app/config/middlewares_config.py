@@ -13,7 +13,11 @@ def configure(app: FastAPI):
     same_site_value = "Strict"
 
     if config["env"] != 'prod':
-        allow_origins = ["http://10.90.90.2:5173"]
+        allow_origins = ["http://10.90.90.2:5173",
+                         "http://10.90.90.3:5173",
+                         "http://10.90.90.4:5173",
+                         "http://10.90.90.5:5173",
+                         "http://10.90.90.6:5173"]
         same_site_value = "None"
 
     app.add_middleware(

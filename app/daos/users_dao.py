@@ -6,8 +6,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from app.models import db_models as model
-from app.schemas.users_sch import CreateUserDB
+from app.schemas.auth_sch import RegisterUser
 from app.utils import database
+from app.utils.enums import AccessLevel, UserStatus
 
 
 class DuplicateUserError(Exception):
@@ -22,7 +23,7 @@ class UserDAO:
     async def get_all(self) -> List[model.Users]:
         """Fetch all users."""
         async with self.db:
-            result = await self.db.execute(select(model.Users).order_by(model.Users.first_name))
+            result = await self.db.execute(select(model.Users).order_by(model.Users.name))
             return result.scalars().all()
 
     async def get_by_id(self, user_id: int) -> model.Users:
@@ -52,15 +53,14 @@ class UserDAO:
             result = await self.db.execute(stmt)
             return result.scalars().first()
 
-    async def create(self, user_data: CreateUserDB) -> model.Users:
+    async def create(self, user_data: RegisterUser) -> model.Users:
         """Create a new user."""
         user = model.Users(
-            first_name=user_data.first_name,
-            last_name=user_data.last_name,
-            email=user_data.email,
+            name=user_data.name,
             password=user_data.password,
-            status=user_data.status,
-            access_level=user_data.access_level
+            email=user_data.email,
+            status=UserStatus.ACTIVE.value,
+            access_level=AccessLevel.NORMAL.value,
         )
         try:
             async with self.db:
