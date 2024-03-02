@@ -63,7 +63,8 @@ class DashboardService:
                                              status=e.endpoint.status.status,
                                              unit=e.unit,
                                              type=e.type,
-                                             duration=e.duration)
+                                             duration=e.duration,
+                                             x=e.x, y=e.y, w=e.w, h=e.h, i=e.i)
                            for e in dashboard.endpoints]
             )
             for dashboard in dashboards
@@ -91,6 +92,7 @@ class DashboardService:
             unit=e.unit,
             type=e.type,
             duration=e.duration,
+            x=e.x, y=e.y, w=e.w, h=e.h, i=e.i,
             logs=await self._get_endpoint_logs_by_type(e.endpoint, e.unit, e.type, e.duration)
         )
             for e in sorted_endpoints]
@@ -116,6 +118,7 @@ class DashboardService:
             unit=e.unit,
             type=e.type,
             duration=e.duration,
+            x=e.x, y=e.y, w=e.w, h=e.h,
             logs=await self._get_endpoint_logs_by_type(e.endpoint, e.unit, e.type, e.duration)
         )
             for e in dashboard.endpoints]

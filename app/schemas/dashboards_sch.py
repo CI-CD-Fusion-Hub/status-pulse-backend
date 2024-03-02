@@ -63,6 +63,11 @@ class DashboardEndpointCreate(BaseModel):
     unit: str
     type: str
     duration: int
+    x: int
+    y: int
+    w: int
+    h: int
+    i: int
 
     @field_validator("type")
     def check_type(cls, type):
@@ -95,6 +100,11 @@ class DashboardEndpoint(BaseModel):
     unit: str
     type: str
     duration: int
+    x: int
+    y: int
+    w: int
+    h: int
+    i: int
     logs: Optional[list] = []
 
     class Config:

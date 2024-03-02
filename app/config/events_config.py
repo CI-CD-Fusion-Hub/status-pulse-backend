@@ -23,8 +23,7 @@ async def create_admin_user():
         if not admin_user:
             hashed_password = hashlib.sha512(config.get("admin_pass").encode('utf-8')).hexdigest()
             new_admin = model.Users(
-                first_name="Admin",
-                last_name="User",
+                name="Admin",
                 email=config.get("admin_email"),
                 password=hashed_password,
                 status="active",

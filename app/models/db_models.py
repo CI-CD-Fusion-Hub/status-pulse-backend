@@ -15,8 +15,7 @@ class Users(Base):
     __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    first_name = Column(String)
-    last_name = Column(String)
+    name = Column(String)
     email = Column(String, unique=True)
     password = Column(String)
     created_at = Column(TIMESTAMP, default=func.now())
@@ -30,8 +29,7 @@ class Users(Base):
     def as_dict(self):
         return {
             'id': self.id,
-            'first_name': self.first_name,
-            'last_name': self.last_name,
+            'name': self.name,
             'email': self.email,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'status': self.status,
@@ -83,6 +81,7 @@ class Endpoints(Base):
     users = relationship("UserEndpoints", back_populates="endpoint")
 
     notifications = relationship("EndpointNotifications", back_populates="endpoint", lazy="subquery")
+    maintenance_window = relationship("EndpointMaintenanceWindows", back_populates="endpoint", lazy="subquery")
 
     def as_dict(self):
         return {
@@ -260,6 +259,11 @@ class DashboardEndpoints(Base):
     type = Column(String)
     duration = Column(Integer)
     unit = Column(String)
+    x = Column(Integer)
+    y = Column(Integer)
+    w = Column(Integer)
+    h = Column(Integer)
+    i = Column(Integer)
 
     endpoint = relationship("Endpoints", uselist=False)
     dashboard = relationship("Dashboards", uselist=False, back_populates="endpoints")
@@ -272,6 +276,52 @@ class DashboardEndpoints(Base):
             'type': self.type,
             'duration': self.duration,
             'unit': self.unit,
+            'x': self.x,
+            'y': self.y,
+            'w': self.w,
+            'h': self.h,
+            'i': self.i,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class MaintenanceWindows(Base):
+    __tablename__ = "maintenance_windows"
+    __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    start_time = Column(TIMESTAMP)
+    end_time = Column(TIMESTAMP)
+    send_notification = Column(Boolean)
+    created_at = Column(TIMESTAMP, default=func.now())
+
+    def as_dict(self):
+        return {
+            'id': self.id,
+            'start_time': self.start_time,
+            'end_time': self.end_time,
+            'send_notification': self.send_notification,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+
+
+class EndpointMaintenanceWindows(Base):
+    __tablename__ = "endpoint_maintenance_windows"
+    __table_args__ = {'schema': DatabaseSchemas.CONFIG_SCHEMA.value}
+
+    endpoint_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.endpoints.id",
+                                             ondelete='CASCADE'), primary_key=True)
+    maintenance_window_id = Column(Integer, ForeignKey(f"{DatabaseSchemas.CONFIG_SCHEMA.value}.maintenance_windows.id",
+                                                       ondelete='CASCADE'), primary_key=True)
+    created_at = Column(TIMESTAMP, default=func.now())
+
+    endpoint = relationship("Endpoints", back_populates="maintenance_window", uselist=False)
+    maintenance_window = relationship("MaintenanceWindows", uselist=False, lazy="subquery")
+
+    def as_dict(self):
+        return {
+            'endpoint_id': self.endpoint_id,
+            'maintenance_window_id': self.maintenance_window_id,
             'created_at': self.created_at.isoformat() if self.created_at else None
         }
 

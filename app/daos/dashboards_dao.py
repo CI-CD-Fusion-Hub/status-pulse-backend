@@ -107,7 +107,12 @@ class DashboardDAO:
                     position=position,
                     type=endpoint.type,
                     unit=endpoint.unit,
-                    duration=endpoint.duration
+                    duration=endpoint.duration,
+                    x=endpoint.x,
+                    y=endpoint.y,
+                    w=endpoint.w,
+                    h=endpoint.h,
+                    i=endpoint.i
                 )
                 for position, endpoint in enumerate(endpoints_data)]
             async with self.db:
@@ -141,7 +146,12 @@ class DashboardDAO:
                     position=position,
                     type=endpoints_data.type,
                     unit=endpoints_data.unit,
-                    duration=endpoints_data.duration
+                    duration=endpoints_data.duration,
+                    x=endpoints_data.x,
+                    y=endpoints_data.y,
+                    w=endpoints_data.w,
+                    h=endpoints_data.h,
+                    i=endpoints_data.i
                 )
                 for position, endpoint_id in enumerate(endpoints_data.endpoints, start=first_available_position)]
 

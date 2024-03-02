@@ -56,8 +56,7 @@ class ValidatorUtils:
 
 
 class UpdateUserProfile(BaseModel):
-    first_name: Optional[str] = None
-    last_name: Optional[str] = None
+    name: Optional[str] = None
     email: Optional[str] = None
     confirm_password: Optional[str] = None
     password: Optional[str] = None
@@ -65,8 +64,7 @@ class UpdateUserProfile(BaseModel):
     class Config:
         json_schema_extra = {
             "example": {
-                "first_name": "First Name",
-                "last_name": "Last Name",
+                "name": "Test User",
                 "email": "sampleemail@co.com",
                 "password": "Dummy@pass123",
                 "confirm_password": "Dummy@pass123"
@@ -110,20 +108,10 @@ class UpdateUserAdmin(UpdateUserProfile):
 
 class UserBaseOut(BaseModel):
     id: int
-    first_name: str
-    last_name: str
+    name: str
     email: str
     status: str
     created_at: str
-    access_level: str
-
-
-class CreateUserDB(BaseModel):
-    first_name: str
-    last_name: str
-    password: str
-    email: str
-    status: str
     access_level: str
 
 

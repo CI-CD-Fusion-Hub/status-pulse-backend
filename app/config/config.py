@@ -25,6 +25,12 @@ class Settings(BaseSettings):
     db_password: str = Field(..., env="db_password")
     db_name: str = Field(..., env="db_name")
 
+    email_domain_name: str = Field(..., env="email_domain_name")
+    email_host: str = Field(..., env="email_host")
+    email_port: int = Field(..., env="email_port")
+    email_username: str = Field(..., env="email_username")
+    email_password: str = Field(..., env="email_password")
+
     @property
     def app(self) -> Dict[str, str]:
         return {
@@ -56,6 +62,16 @@ class Settings(BaseSettings):
     def token(self) -> Dict[str, str]:
         return {
             "secret": self.app_token_secret
+        }
+
+    @property
+    def email(self) -> Dict[str, str]:
+        return {
+            "domain_name": self.email_domain_name,
+            "host": self.email_host,
+            "port": self.email_port,
+            "username": self.email_username,
+            "password": self.email_password
         }
 
     class Config:

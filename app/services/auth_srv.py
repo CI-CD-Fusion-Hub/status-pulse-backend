@@ -1,11 +1,14 @@
 import hashlib
+from threading import Thread
+
 from fastapi import Request
 from fastapi import status as Status
 
 from app.daos.users_dao import UserDAO, DuplicateUserError
 from app.schemas.auth_sch import LoginUser, RegisterUser
-from app.schemas.users_sch import UserBaseOut, CreateUserDB
-from app.utils.enums import UserStatus, SessionAttributes, AccessLevel
+from app.schemas.users_sch import UserBaseOut
+from app.utils.enums import UserStatus, SessionAttributes
+from app.utils.mail_handler import MailHandler
 from app.utils.response import ok, error
 from app.utils.logger import Logger
 
@@ -28,22 +31,16 @@ class AuthService:
 
     async def register_user(self, user_info: RegisterUser):
         try:
-            LOGGER.info("Creating user with local auth method")
-            user_data = CreateUserDB(
-                first_name=user_info.first_name,
-                last_name=user_info.last_name,
-                password=hashlib.sha512(user_info.password.encode('utf-8')).hexdigest(),
-                email=user_info.email,
-                status=UserStatus.ACTIVE.value,
-                access_level=AccessLevel.NORMAL.value,
-                )
+            LOGGER.info("Creating user with local auth method.")
+            user_info.password = hashlib.sha512(user_info.password.encode('utf-8')).hexdigest()
 
-            user = await self.user_dao.create(user_data)
+            user = await self.user_dao.create(user_info)
+            Thread(target=MailHandler().send_new_account, args=(user.email,)).start()
+
             return ok(
                 message="Successfully created user.",
                 data=UserBaseOut.model_validate(user.as_dict())
             )
-
         except DuplicateUserError as e:
             LOGGER.error(f"DuplicateUserError in register_user: {e}")
             return error(message=e.detail, status_code=Status.HTTP_400_BAD_REQUEST)
