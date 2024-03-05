@@ -1,7 +1,7 @@
 from typing import List
 
 from psycopg2 import errorcodes
-from sqlalchemy import select, update, delete, func
+from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
@@ -104,7 +104,6 @@ class DashboardDAO:
                 model.DashboardEndpoints(
                     dashboard_id=dashboard_id,
                     endpoint_id=endpoint.id,
-                    position=position,
                     type=endpoint.type,
                     unit=endpoint.unit,
                     duration=endpoint.duration,
@@ -114,9 +113,35 @@ class DashboardDAO:
                     h=endpoint.h,
                     i=endpoint.i
                 )
-                for position, endpoint in enumerate(endpoints_data)]
+                for endpoint in endpoints_data]
             async with self.db:
                 self.db.add_all(endpoints)
+                await self.db.commit()
+        except IntegrityError as e:
+            # Handle other types of IntegrityError (foreign key, etc.) as needed
+            await self.db.rollback()
+            raise e
+
+    async def update_endpoint_in_dashboard(self, dashboard_id: int, endpoints_data: DashboardEndpoint):
+        """Update endpoint in a specific dashboard."""
+        try:
+            endpoint = model.DashboardEndpoints(
+                dashboard_id=dashboard_id,
+                endpoint_id=endpoints_data.id,
+                type=endpoints_data.type,
+                unit=endpoints_data.unit,
+                duration=endpoints_data.duration,
+                x=endpoints_data.x,
+                y=endpoints_data.y,
+                w=endpoints_data.w,
+                h=endpoints_data.h,
+                i=endpoints_data.i
+            )
+            async with self.db:
+                await self.db.execute(update(model.DashboardEndpoints)
+                                      .where(model.DashboardEndpoints.endpoint_id == endpoints_data.id)
+                                      .where(model.DashboardEndpoints.i == endpoints_data.i)
+                                      .values(**endpoint.as_dict()))
                 await self.db.commit()
         except IntegrityError as e:
             if e.orig.pgcode == errorcodes.FOREIGN_KEY_VIOLATION \
@@ -135,15 +160,21 @@ class DashboardDAO:
                                   .where(model.DashboardEndpoints.dashboard_id == dashboard_id))
             await self.db.commit()
 
-    async def add_endpoint_to_dashboard(self, dashboard_id: int, endpoints_data: DashboardEndpointCreate,
-                                        first_available_position: int):
+    async def delete_assigned_widget(self, dashboard_id: int, widget_id: int) -> None:
+        """Delete dashboard widget."""
+        async with self.db:
+            await self.db.execute(delete(model.DashboardEndpoints)
+                                  .where(model.DashboardEndpoints.dashboard_id == dashboard_id)
+                                  .where(model.DashboardEndpoints.i == widget_id))
+            await self.db.commit()
+
+    async def add_endpoint_to_dashboard(self, dashboard_id: int, endpoints_data: DashboardEndpointCreate):
         """Add a new endpoints to a specific dashboard."""
         try:
             endpoints = [
                 model.DashboardEndpoints(
                     dashboard_id=dashboard_id,
                     endpoint_id=endpoint_id,
-                    position=position,
                     type=endpoints_data.type,
                     unit=endpoints_data.unit,
                     duration=endpoints_data.duration,
@@ -153,7 +184,7 @@ class DashboardDAO:
                     h=endpoints_data.h,
                     i=endpoints_data.i
                 )
-                for position, endpoint_id in enumerate(endpoints_data.endpoints, start=first_available_position)]
+                for endpoint_id in endpoints_data.endpoints]
 
             async with self.db:
                 self.db.add_all(endpoints)
@@ -167,13 +198,3 @@ class DashboardDAO:
                 # Handle other types of IntegrityError (foreign key, etc.) as needed
                 await self.db.rollback()
                 raise e
-
-    async def get_next_position(self, dashboard_id: int) -> int:
-        max_position_query = select(func.max(model.DashboardEndpoints.position)).where(
-            model.DashboardEndpoints.dashboard_id == dashboard_id)
-
-        async with self.db:
-            result = await self.db.execute(max_position_query)
-            max_position = result.scalar()
-
-        return (max_position or 0) + 1

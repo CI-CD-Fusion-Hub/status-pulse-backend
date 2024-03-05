@@ -10,7 +10,7 @@ class ChartProcessor:
     def __init__(self):
         self.log_table_dao = LogTableDAO()
 
-    async def process_bar_chart(self, endpoint: model.Endpoints, unit: str, duration: int):
+    async def process_line_chart(self, endpoint: model.Endpoints, unit: str, duration: int):
         log_records = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, unit, duration)
         return [
             EndpointLogs(
