@@ -98,7 +98,7 @@ class DashboardDAO:
             await self.db.commit()
 
     async def update_endpoints_in_dashboard(self, dashboard_id: int, endpoints_data: List[DashboardEndpoint]):
-        """Update endpoint in a specific dashboard."""
+        """Add a list of endpoints to a specific dashboard."""
         try:
             endpoints = [
                 model.DashboardEndpoints(
@@ -123,7 +123,7 @@ class DashboardDAO:
             raise e
 
     async def update_endpoint_in_dashboard(self, dashboard_id: int, endpoints_data: DashboardEndpoint):
-        """Add a list of endpoints to a specific dashboard."""
+        """Update endpoint in a specific dashboard."""
         try:
             endpoint = model.DashboardEndpoints(
                 dashboard_id=dashboard_id,
