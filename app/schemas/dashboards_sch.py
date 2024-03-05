@@ -105,7 +105,6 @@ class DashboardEndpoint(BaseModel):
     w: int
     h: int
     i: int
-    logs: Optional[list] = []
 
     class Config:
         json_schema_extra = {
