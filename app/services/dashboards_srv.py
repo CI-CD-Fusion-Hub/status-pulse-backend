@@ -92,8 +92,7 @@ class DashboardService:
             unit=e.unit,
             type=e.type,
             duration=e.duration,
-            x=e.x, y=e.y, w=e.w, h=e.h, i=e.i,
-            logs=await self._get_endpoint_logs_by_type(e.endpoint, e.unit, e.type, e.duration)
+            x=e.x, y=e.y, w=e.w, h=e.h, i=e.i
         )
             for e in sorted_endpoints]
 
@@ -119,7 +118,6 @@ class DashboardService:
             type=e.type,
             duration=e.duration,
             x=e.x, y=e.y, w=e.w, h=e.h,
-            logs=await self._get_endpoint_logs_by_type(e.endpoint, e.unit, e.type, e.duration)
         )
             for e in dashboard.endpoints]
 
@@ -217,12 +215,3 @@ class DashboardService:
         except DashboardError as e:
             LOGGER.error(f"DashboardError in create dashboard: {e}")
             return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
-
-    async def _get_endpoint_logs_by_type(self, endpoint: model.Endpoints, unit: str, chart_type: str, duration: int):
-        if endpoint.log_table and chart_type == DashboardChartTypes.BAR_CHART.value:
-            return await self.chart_processor.process_bar_chart(endpoint, unit, duration)
-
-        if endpoint.log_table and chart_type == DashboardChartTypes.UPTIME.value:
-            return await self.chart_processor.process_uptime_chart(endpoint, unit, duration)
-
-        return []

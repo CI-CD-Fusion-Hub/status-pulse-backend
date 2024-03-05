@@ -65,6 +65,17 @@ async def get_uptime_logs_by_interval(request: Request, endpoint_id: int,
     return await endpoint_service.get_uptime_logs_by_interval(request, endpoint_id, date_from, date_to, full)
 
 
+@router.get("/endpoints/{endpoint_id}/widget", tags=["endpoints"])
+@auth_required
+async def get_endpoint_widget_graph_by_id(request: Request, endpoint_id: int,
+                                          type: str = Query(None),
+                                          unit: str = Query(None),
+                                          duration: int = Query(None),
+                                          endpoint_service: EndpointService = Depends(create_endpoint_service)
+                                          ) -> Response:
+    return await endpoint_service.get_widget_graph_by_id(request, endpoint_id, type, unit, duration)
+
+
 @router.post("/endpoints/{endpoint_id}/share", tags=["endpoints"])
 @auth_required
 async def share_endpoint(request: Request, endpoint_id: int, token_cfg: CreateTokenBody,
