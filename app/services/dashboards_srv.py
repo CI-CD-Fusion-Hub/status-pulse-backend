@@ -81,8 +81,6 @@ class DashboardService:
         self._validate_user_access(request, dashboard_id)
         dashboard = await self._get_dashboard(dashboard_id)
 
-        sorted_endpoints = sorted(dashboard.endpoints, key=lambda e: e.position)
-
         dashboard_endpoints = DashboardOut.model_validate(dashboard.as_dict())
         dashboard_endpoints.endpoints = [DashboardEndpoint(
             id=e.endpoint.id,
@@ -94,7 +92,7 @@ class DashboardService:
             duration=e.duration,
             x=e.x, y=e.y, w=e.w, h=e.h, i=e.i
         )
-            for e in sorted_endpoints]
+            for e in dashboard.endpoints]
 
         LOGGER.info(f"Successfully retrieved dashboard {dashboard_id}.")
         return ok(message="Successfully provided dashboard.",
@@ -198,16 +196,15 @@ class DashboardService:
 
         await self._upsert_endpoints_to_dashboard(request, dashboard.id, endpoints_order)
         LOGGER.info(f"Successfully updated endpoints to dashboard ID {dashboard_id}.")
-        return ok(message="Dashboard has been successfully updated.", data=endpoints_order)
+        return ok(message="Dashboard order has been successfully updated.", data=endpoints_order)
 
     async def add_endpoints_to_dashboard(self, request: Request, dashboard_id: int,
                                          endpoints_data: DashboardEndpointCreate):
         try:
             self._validate_user_access(request, dashboard_id)
             dashboard = await self._get_dashboard(dashboard_id)
-            first_position = await self.dashboards_dao.get_next_position(dashboard.id)
 
-            await self.dashboards_dao.add_endpoint_to_dashboard(dashboard.id, endpoints_data, first_position)
+            await self.dashboards_dao.add_endpoint_to_dashboard(dashboard.id, endpoints_data)
 
             LOGGER.info(f"Successfully updated endpoints to dashboard ID {dashboard_id}.")
             return ok(message="Dashboard has been successfully updated.", data=endpoints_data)
@@ -215,3 +212,20 @@ class DashboardService:
         except DashboardError as e:
             LOGGER.error(f"DashboardError in create dashboard: {e}")
             return error(message=e.detail, status_code=status.HTTP_400_BAD_REQUEST)
+
+    async def update_endpoint_widget(self, request: Request, dashboard_id: int, endpoints_data: DashboardEndpoint):
+        self._validate_user_access(request, dashboard_id)
+        dashboard = await self._get_dashboard(dashboard_id)
+
+        await self.dashboards_dao.update_endpoint_in_dashboard(dashboard.id, endpoints_data)
+
+        LOGGER.info(f"Successfully updated endpoint in dashboard - {dashboard_id}.")
+        return ok(message="Dashboard has been successfully updated.", data=endpoints_data)
+
+    async def delete_endpoint_widget(self, request: Request, dashboard_id: int, widget_id: int):
+        self._validate_user_access(request, dashboard_id)
+        await self._get_dashboard(dashboard_id)
+        await self.dashboards_dao.delete_assigned_widget(dashboard_id, widget_id)
+
+        LOGGER.info(f"Successfully deleted endpoint in dashboard - {dashboard_id}.")
+        return ok(message="Widget has been successfully delete.")

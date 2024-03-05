@@ -153,7 +153,7 @@ class EndpointService:
         if not endpoint.log_table:
             return ok(message="No logs found.", data=[])
 
-        updated_logs = await self.chart_processor.process_bar_chart(endpoint, DashboardChartUnits.HOURS.value, duration)
+        updated_logs = await self.chart_processor.process_line_chart(endpoint, DashboardChartUnits.HOURS.value, duration)
 
         return ok(message="Successfully provided status graph for endpoint.",
                   data=updated_logs)
@@ -190,8 +190,8 @@ class EndpointService:
             return error(message=f"{duration} should be a valid number between 1 and 72 hours.")
 
         logs = []
-        if endpoint.log_table and chart_type == DashboardChartTypes.BAR_CHART.value:
-            logs = await self.chart_processor.process_bar_chart(endpoint, unit, duration)
+        if endpoint.log_table and chart_type == DashboardChartTypes.LINE_CHART.value:
+            logs = await self.chart_processor.process_line_chart(endpoint, unit, duration)
 
         if endpoint.log_table and chart_type == DashboardChartTypes.UPTIME.value:
             logs = await self.chart_processor.process_uptime_chart(endpoint, unit, duration)

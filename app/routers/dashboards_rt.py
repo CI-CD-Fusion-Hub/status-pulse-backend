@@ -50,18 +50,34 @@ async def update(request: Request, dashboard_id: int, dashboard_data: UpdateDash
     return await dashboards_service.update_dashboard(request, dashboard_id, dashboard_data)
 
 
-@router.post("/dashboards/{dashboard_id}/endpoints", tags=["dashboards"])
+@router.post("/dashboards/{dashboard_id}/widgets", tags=["dashboards"])
 @auth_required
 async def add_endpoints(request: Request, dashboard_id: int, endpoints_data: DashboardEndpointCreate,
                         dashboards_service: DashboardService = Depends(create_dashboard_service)) -> DashboardOut:
     return await dashboards_service.add_endpoints_to_dashboard(request, dashboard_id, endpoints_data)
 
 
-@router.put("/dashboards/{dashboard_id}/endpoints", tags=["dashboards"])
+@router.put("/dashboards/{dashboard_id}/layout", tags=["dashboards"])
 @auth_required
 async def add_endpoints(request: Request, dashboard_id: int, endpoints_order: List[DashboardEndpoint],
                         dashboards_service: DashboardService = Depends(create_dashboard_service)) -> DashboardOut:
     return await dashboards_service.update_endpoints_order(request, dashboard_id, endpoints_order)
+
+
+@router.put("/dashboards/{dashboard_id}/widgets", tags=["dashboards"])
+@auth_required
+async def update_endpoint_widget(request: Request, dashboard_id: int, endpoint_data: DashboardEndpoint,
+                                 dashboards_service: DashboardService = Depends(create_dashboard_service)
+                                 ) -> DashboardOut:
+    return await dashboards_service.update_endpoint_widget(request, dashboard_id, endpoint_data)
+
+
+@router.delete("/dashboards/{dashboard_id}/widgets/{widget_id}", tags=["dashboards"])
+@auth_required
+async def delete_endpoint_widget(request: Request, dashboard_id: int, widget_id: int,
+                                 dashboards_service: DashboardService = Depends(create_dashboard_service)
+                                 ) -> DashboardOut:
+    return await dashboards_service.delete_endpoint_widget(request, dashboard_id, widget_id)
 
 
 @router.delete("/dashboards/{dashboard_id}", tags=["dashboards"])

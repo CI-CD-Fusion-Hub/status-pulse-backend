@@ -37,7 +37,7 @@ class DashboardScopes(Enum):
 
 class DashboardChartTypes(Enum):
     UPTIME = 'Uptime'
-    BAR_CHART = 'BarChart'
+    LINE_CHART = 'LineChart'
 
 
 class DashboardChartUnits(Enum):
