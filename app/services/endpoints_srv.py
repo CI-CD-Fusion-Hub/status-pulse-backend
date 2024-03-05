@@ -14,7 +14,8 @@ from app.schemas.endpoints_sch import BaseEndpointsOut, CreateEndpoint, CreateEn
     EndpointsOut, EndpointLogs, EndpointNotificationLogs
 from app.schemas.shared_tokens_sch import CreateToken, CreateTokenBody
 from app.utils.chart_processor import ChartProcessor
-from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus, EndpointPermissions, DashboardChartUnits
+from app.utils.enums import SessionAttributes, AccessLevel, EndpointStatus, EndpointPermissions, DashboardChartUnits, \
+    DashboardChartTypes
 from app.utils.logger import Logger
 from app.utils.response import ok, error
 from app.utils.token_manager import TokenManager
@@ -168,6 +169,35 @@ class EndpointService:
 
         return ok(message="Successfully provided status graph for endpoint.",
                   data=hourly_logs)
+
+    async def get_widget_graph_by_id(self, request: Request, endpoint_id: int, chart_type: str, unit: str, duration: int):
+        self._validate_access(request, endpoint_id)
+        endpoint = await self._get_endpoint(endpoint_id)
+        if not endpoint.log_table:
+            return ok(message="No logs found.", data=[])
+
+        if unit not in (dcu.value for dcu in DashboardChartUnits):
+            return error(message=f"{unit} is not a valid unit. Valid units are: "
+                                 f"{', '.join(dcu.value for dcu in DashboardChartUnits)}")
+
+        if chart_type not in (dct.value for dct in DashboardChartTypes):
+            return error(message=f"{chart_type} is not a valid chart type. Valid types are: "
+                                 f"{', '.join(dct.value for dct in DashboardChartTypes)}")
+
+        if unit == DashboardChartUnits.DAY.value and (duration < 1 or duration > 31):
+            return error(message=f"{duration} should be a valid number between 1 and 31 days.")
+        if unit == DashboardChartUnits.HOURS.value and (duration < 1 or duration > 72):
+            return error(message=f"{duration} should be a valid number between 1 and 72 hours.")
+
+        logs = []
+        if endpoint.log_table and chart_type == DashboardChartTypes.BAR_CHART.value:
+            logs = await self.chart_processor.process_bar_chart(endpoint, unit, duration)
+
+        if endpoint.log_table and chart_type == DashboardChartTypes.UPTIME.value:
+            logs = await self.chart_processor.process_uptime_chart(endpoint, unit, duration)
+
+        return ok(message="Successfully provided widget.",
+                  data=logs)
 
     async def create_endpoint(self, request: Request, endpoint_data: CreateEndpoint):
         try:
