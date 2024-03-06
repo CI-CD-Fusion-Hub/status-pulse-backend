@@ -255,7 +255,6 @@ class DashboardEndpoints(Base):
                                               ondelete='CASCADE'))
 
     created_at = Column(TIMESTAMP, default=func.now())
-    position = Column(Integer)
     type = Column(String)
     duration = Column(Integer)
     unit = Column(String)
@@ -272,7 +271,6 @@ class DashboardEndpoints(Base):
         return {
             'endpoint_id': self.endpoint_id,
             'dashboard_id': self.dashboard_id,
-            'position': self.position,
             'type': self.type,
             'duration': self.duration,
             'unit': self.unit,
