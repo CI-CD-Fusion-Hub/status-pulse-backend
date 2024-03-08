@@ -47,7 +47,8 @@ class Settings(BaseSettings):
             "ssl_cert": self.app_ssl_cert,
             "ssl_key": self.app_ssl_key,
             "admin_email": self.app_admin_email,
-            "admin_pass": self.app_admin_pass
+            "admin_pass": self.app_admin_pass,
+            "workers": self.app_workers
         }
 
     @property

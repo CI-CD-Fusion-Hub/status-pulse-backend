@@ -25,5 +25,5 @@ if __name__ == "__main__":
         port=int(config['port']),
         ssl_keyfile=config.get('ssl_key', None),
         ssl_certfile=config.get('ssl_cert', None),
-        workers=int(config.get('workers', 4)),
+        workers=int(config.get('workers', 1)),
     )
