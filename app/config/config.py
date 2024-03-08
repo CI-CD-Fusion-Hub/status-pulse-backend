@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     db_user: str = Field(..., env="db_user")
     db_password: str = Field(..., env="db_password")
     db_name: str = Field(..., env="db_name")
+    db_pool_size: str = Field(..., env="db_pool_size")
+    db_max_overflow: str = Field(..., env="db_max_overflow")
 
     email_domain_name: str = Field(..., env="email_domain_name")
     email_host: str = Field(..., env="email_host")
@@ -57,7 +59,9 @@ class Settings(BaseSettings):
             "host": self.db_host,
             "user": self.db_user,
             "password": self.db_password,
-            "name": self.db_name
+            "name": self.db_name,
+            "pool_size": self.db_pool_size,
+            "max_overflow": self.db_max_overflow
         }
 
     @property

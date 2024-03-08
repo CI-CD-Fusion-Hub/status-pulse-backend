@@ -13,8 +13,8 @@ SQLALCHEMY_ASYNC_DATABASE_URL = \
     f"postgresql+asyncpg://{config['user']}:{config['password']}@{config['host']}/{config['name']}"
 
 engine = create_async_engine(SQLALCHEMY_ASYNC_DATABASE_URL,
-                             pool_size=100,
-                             max_overflow=2,
+                             pool_size=int(config.get('pool_size', 1000)),
+                             max_overflow=int(config.get('max_overflow', 2)),
                              pool_pre_ping=True,
                              pool_use_lifo=True)
 
