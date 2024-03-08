@@ -20,9 +20,10 @@ if __name__ == "__main__":
     LOGGING_CONFIG["formatters"]["default"]["fmt"] = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     LOGGING_CONFIG["formatters"]["access"]["fmt"] = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     uvicorn.run(
-        app,
+        "main:app",
         host=config['host'],
         port=int(config['port']),
         ssl_keyfile=config.get('ssl_key', None),
         ssl_certfile=config.get('ssl_cert', None),
+        workers=int(config.get('workers', 4)),
     )

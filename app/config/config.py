@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     app_admin_email: str = Field(..., env="app_admin_email")
     app_admin_pass: str = Field(..., env="app_admin_pass")
     app_token_secret: str = Field(..., env="app_token_secret")
+    app_workers: int = Field(..., env="app_workers")
 
     db_host: str = Field(..., env="db_host")
     db_user: str = Field(..., env="db_user")
