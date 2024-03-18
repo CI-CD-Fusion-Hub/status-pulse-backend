@@ -3,6 +3,7 @@ from datetime import timezone, datetime, timedelta
 from typing import List
 
 from fastapi import status, Request
+from sqlalchemy.orm import Session
 
 from app.daos.dashboards_dao import DashboardDAO, DashboardError
 from app.daos.log_table_dao import LogTableDAO
@@ -20,9 +21,9 @@ LOGGER = Logger().start_logger()
 
 
 class DashboardService:
-    def __init__(self):
-        self.dashboards_dao = DashboardDAO()
-        self.chart_processor = ChartProcessor()
+    def __init__(self, db: Session):
+        self.dashboards_dao = DashboardDAO(db)
+        self.chart_processor = ChartProcessor(db)
 
     @classmethod
     def _have_public_access(cls, dashboard: model.Dashboards):

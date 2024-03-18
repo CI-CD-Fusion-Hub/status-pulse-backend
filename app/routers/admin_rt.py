@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Request, Query
+from sqlalchemy.orm import Session
 
 from app.schemas.endpoints_sch import UpdateEndpoint, BaseEndpointsOut, EndpointsOut
 from app.schemas.response_sch import Response
@@ -6,12 +7,13 @@ from app.schemas.users_sch import UserResponse, UpdateUserProfile, UpdateUserAdm
 from app.services.endpoints_srv import EndpointService
 from app.services.users_srv import UserService
 from app.utils.check_session import auth_required, admin_access_required
+from app.utils.database import get_db
 
 router = APIRouter()
 
 
-def create_endpoint_service():
-    return EndpointService()
+def create_endpoint_service(db: Session = Depends(get_db)):
+    return EndpointService(db)
 
 
 #############

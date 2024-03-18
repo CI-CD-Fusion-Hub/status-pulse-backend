@@ -1,5 +1,7 @@
 from datetime import timezone, datetime, timedelta
 
+from sqlalchemy.orm import Session
+
 from app.daos.log_table_dao import LogTableDAO
 from app.schemas.endpoints_sch import EndpointLogs, BaseEndpointLogs
 from app.utils.enums import EndpointStatus, DashboardChartUnits
@@ -7,8 +9,8 @@ from app.models import db_models as model
 
 
 class ChartProcessor:
-    def __init__(self):
-        self.log_table_dao = LogTableDAO()
+    def __init__(self, db: Session):
+        self.log_table_dao = LogTableDAO(db)
 
     async def process_line_chart(self, endpoint: model.Endpoints, unit: str, duration: int):
         log_records = await self.log_table_dao.select_logs_from_last_hours(endpoint.log_table, unit, duration)

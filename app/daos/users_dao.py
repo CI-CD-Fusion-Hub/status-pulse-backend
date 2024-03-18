@@ -3,7 +3,7 @@ from typing import List
 from psycopg2 import errorcodes
 from sqlalchemy import select, delete, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, Session
 
 from app.models import db_models as model
 from app.schemas.auth_sch import RegisterUser
@@ -17,8 +17,8 @@ class DuplicateUserError(Exception):
 
 
 class UserDAO:
-    def __init__(self):
-        self.db = database.SessionLocal()
+    def __init__(self, db: Session = None):
+        self.db = db or database.SessionLocal()
 
     async def get_all(self) -> List[model.Users]:
         """Fetch all users."""

@@ -3,7 +3,7 @@ from typing import List
 from psycopg2 import errorcodes
 from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, Session
 
 from app.models import db_models as model
 from app.schemas.dashboards_sch import CreateDashboard, DashboardEndpointCreate, DashboardEndpoint
@@ -19,8 +19,8 @@ class DashboardError(Exception):
 
 
 class DashboardDAO:
-    def __init__(self):
-        self.db = database.SessionLocal()
+    def __init__(self, db: Session = None):
+        self.db = db or database.SessionLocal()
 
     async def get_all(self) -> List[model.Dashboards]:
         """Fetch all dashboards."""

@@ -3,7 +3,7 @@ from typing import List, Dict
 from psycopg2 import errorcodes
 from sqlalchemy import select, delete, update, String, or_, func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload, selectinload
+from sqlalchemy.orm import joinedload, selectinload, Session
 
 from app.models import db_models as model
 from app.schemas.endpoints_sch import CreateEndpointInDb
@@ -17,8 +17,8 @@ class DuplicateEndpointError(Exception):
 
 
 class EndpointDAO:
-    def __init__(self):
-        self.db = database.SessionLocal()
+    def __init__(self, db: Session = None):
+        self.db = db or database.SessionLocal()
 
     async def get_all_with_latest_log_status(self, page: int, per_page: int, search_query: str,
                                              user_endpoints: dict = None,

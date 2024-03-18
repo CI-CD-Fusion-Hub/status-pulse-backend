@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy.orm import Session
 
 from app.schemas.auth_sch import RegisterUser, LoginUser
 from app.schemas.response_sch import Response
 from app.schemas.users_sch import UserResponse
 from app.services.auth_srv import AuthService
+from app.utils.database import get_db
 
 router = APIRouter()
 
 
-def create_auth_service():
-    return AuthService()
+def create_auth_service(db: Session = Depends(get_db)):
+    return AuthService(db)
 
 
 @router.post("/login", tags=["auth"])

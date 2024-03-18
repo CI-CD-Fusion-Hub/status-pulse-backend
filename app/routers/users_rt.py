@@ -1,15 +1,17 @@
 from fastapi import APIRouter, Request, Depends
+from sqlalchemy.orm import Session
 
 from app.schemas.users_sch import UserResponse, UpdateUserProfile
 from app.services.users_srv import UserService
 from app.utils.check_session import auth_required
+from app.utils.database import get_db
 from app.utils.enums import SessionAttributes
 
 router = APIRouter()
 
 
-def create_user_service():
-    return UserService()
+def create_user_service(db: Session = Depends(get_db)):
+    return UserService(db)
 
 
 @router.get("/user", tags=["users"])

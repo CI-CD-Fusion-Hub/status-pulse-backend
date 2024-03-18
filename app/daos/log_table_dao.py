@@ -2,6 +2,7 @@ import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text, select, and_
+from sqlalchemy.orm import Session
 
 from app.utils import database
 from app.utils.enums import DatabaseSchemas, DashboardChartUnits
@@ -11,8 +12,8 @@ LOGGER = Logger().start_logger()
 
 
 class LogTableDAO:
-    def __init__(self):
-        self.db = database.SessionLocal()
+    def __init__(self, db: Session = None):
+        self.db = db or database.SessionLocal()
 
     @classmethod
     def _sanitize_table_name(cls, table_name):

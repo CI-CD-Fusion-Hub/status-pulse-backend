@@ -3,6 +3,7 @@ from threading import Thread
 
 from fastapi import Request
 from fastapi import status as Status
+from sqlalchemy.orm import Session
 
 from app.daos.users_dao import UserDAO, DuplicateUserError
 from app.schemas.auth_sch import LoginUser, RegisterUser
@@ -16,8 +17,8 @@ LOGGER = Logger().start_logger()
 
 
 class AuthService:
-    def __init__(self):
-        self.user_dao = UserDAO()
+    def __init__(self, db: Session):
+        self.user_dao = UserDAO(db)
 
     @classmethod
     def _verify_password(cls, plain_password: str, hashed_password: str) -> bool:

@@ -1,18 +1,20 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Request, Query
+from sqlalchemy.orm import Session
 
 from app.schemas.endpoints_sch import CreateEndpoint, UpdateEndpoint, BaseEndpointsOut, EndpointsOut
 from app.schemas.response_sch import Response
 from app.schemas.shared_tokens_sch import CreateTokenBody
 from app.services.endpoints_srv import EndpointService
 from app.utils.check_session import auth_required
+from app.utils.database import get_db
 
 router = APIRouter()
 
 
-def create_endpoint_service():
-    return EndpointService()
+def create_endpoint_service(db: Session = Depends(get_db)):
+    return EndpointService(db)
 
 
 @router.get("/endpoints", tags=["endpoints"])

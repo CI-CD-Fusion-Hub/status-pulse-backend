@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from fastapi import Request, status
+from sqlalchemy.orm import Session
 
 from app.daos.endpoints_dao import EndpointDAO, DuplicateEndpointError
 from app.daos.log_table_dao import LogTableDAO
@@ -24,12 +25,12 @@ LOGGER = Logger().start_logger()
 
 
 class EndpointService:
-    def __init__(self):
-        self.endpoint_dao = EndpointDAO()
-        self.log_table_dao = LogTableDAO()
-        self.chart_processor = ChartProcessor()
-        self.notification_table_dao = NotificationTableDAO()
-        self.shared_token_dao = SharedTokenDAO()
+    def __init__(self, db: Session):
+        self.endpoint_dao = EndpointDAO(db)
+        self.log_table_dao = LogTableDAO(db)
+        self.chart_processor = ChartProcessor(db)
+        self.notification_table_dao = NotificationTableDAO(db)
+        self.shared_token_dao = SharedTokenDAO(db)
 
     @classmethod
     def generate_table_name(cls):

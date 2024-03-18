@@ -3,6 +3,7 @@ from typing import List
 from psycopg2 import errorcodes
 from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.schemas.notifications_sch import CreateNotification
 from app.utils import database
@@ -18,8 +19,8 @@ class DuplicateNotificationError(Exception):
 
 
 class NotificationDAO:
-    def __init__(self):
-        self.db = database.SessionLocal()
+    def __init__(self, db: Session = None):
+        self.db = db or database.SessionLocal()
 
     async def get_all(self) -> List[model.Notifications]:
         """Fetch all notifications."""

@@ -2,6 +2,7 @@ from typing import List
 
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.models import db_models as model
 from app.schemas.shared_tokens_sch import CreateToken
@@ -9,8 +10,8 @@ from app.utils import database
 
 
 class SharedTokenDAO:
-    def __init__(self):
-        self.db = database.SessionLocal()
+    def __init__(self, db: Session = None):
+        self.db = db or database.SessionLocal()
 
     async def get_all(self) -> List[model.ShareTokens]:
         """Fetch all tokens."""

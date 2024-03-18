@@ -1,4 +1,5 @@
 from fastapi import status, Request
+from sqlalchemy.orm import Session
 
 from app.daos.notifications_dao import NotificationDAO, DuplicateNotificationError
 from app.exceptions.custom_http_expeption import CustomHTTPException
@@ -11,8 +12,8 @@ LOGGER = Logger().start_logger()
 
 
 class NotificationService:
-    def __init__(self):
-        self.notification_dao = NotificationDAO()
+    def __init__(self, db: Session):
+        self.notification_dao = NotificationDAO(db)
 
     @classmethod
     def _validate_user_access(cls, request: Request, notification_id: int):

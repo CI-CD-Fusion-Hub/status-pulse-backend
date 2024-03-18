@@ -1,6 +1,7 @@
 import hashlib
 
 from fastapi import status as Status, Request
+from sqlalchemy.orm import Session
 
 from app.schemas.users_sch import UserBaseOut, UpdateUserProfile, UpdateUserAdmin
 from app.daos.users_dao import UserDAO
@@ -12,8 +13,8 @@ LOGGER = Logger().start_logger()
 
 
 class UserService:
-    def __init__(self):
-        self.user_dao = UserDAO()
+    def __init__(self, db: Session):
+        self.user_dao = UserDAO(db)
 
     @classmethod
     async def get_user_info_from_request(cls, request):

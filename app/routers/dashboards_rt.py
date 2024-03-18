@@ -1,18 +1,20 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, Request, Query
+from sqlalchemy.orm import Session
 
 from app.schemas.dashboards_sch import DashboardOut, CreateDashboard, UpdateDashboard, DashboardEndpoint, \
     DashboardEndpointCreate
 from app.schemas.response_sch import Response
 from app.services.dashboards_srv import DashboardService
 from app.utils.check_session import auth_required
+from app.utils.database import get_db
 
 router = APIRouter()
 
 
-def create_dashboard_service():
-    return DashboardService()
+def create_dashboard_service(db: Session = Depends(get_db)):
+    return DashboardService(db)
 
 
 @router.get("/dashboards", tags=["dashboards"])
