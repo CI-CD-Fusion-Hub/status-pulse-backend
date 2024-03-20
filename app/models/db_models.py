@@ -1,10 +1,11 @@
 from typing import Optional, List
 
-from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, TIMESTAMP, SmallInteger, Table, ForeignKey, Boolean, UniqueConstraint, \
+    Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from sqlalchemy.sql.ddl import CreateTable
+from sqlalchemy.sql.ddl import CreateTable, CreateIndex
 
 from app.utils.database import Base, SessionLocal
 from app.utils.enums import DatabaseSchemas
@@ -333,6 +334,8 @@ async def create_table(table_name: str, schema: DatabaseSchemas, columns: List[C
         await session.execute(create_table_stmt)
         await session.commit()
 
+    return new_table
+
 
 async def create_log_table(table_name: str):
     columns = [
@@ -344,7 +347,14 @@ async def create_log_table(table_name: str):
         Column('response', JSONB),
         Column('response_time', Integer)
     ]
-    await create_table(table_name, DatabaseSchemas.LOG_SCHEMA, columns)
+    table = await create_table(table_name, DatabaseSchemas.LOG_SCHEMA, columns)
+
+    # Create an index on the created_at column
+    index_name = f"idx_{table_name}_created_at"
+    index = Index(index_name, Column("created_at"), unique=False, _table=table)
+    async with SessionLocal() as session:
+        await session.execute(CreateIndex(index))
+        await session.commit()
 
 
 async def create_notification_table(table_name: str):
