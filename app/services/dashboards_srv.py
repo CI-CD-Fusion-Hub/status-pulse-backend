@@ -10,7 +10,7 @@ from app.daos.log_table_dao import LogTableDAO
 from app.exceptions.custom_http_expeption import CustomHTTPException
 from app.models import db_models as model
 from app.schemas.dashboards_sch import DashboardOut, DashboardEndpoint, CreateDashboard, UpdateDashboard, \
-    DashboardEndpointCreate
+    DashboardEndpointCreate, DashboardEndpointLight
 from app.schemas.endpoints_sch import EndpointLogs, BaseEndpointLogs
 from app.utils.chart_processor import ChartProcessor
 from app.utils.enums import SessionAttributes, DashboardScopes, DashboardChartTypes, EndpointStatus
@@ -58,14 +58,8 @@ class DashboardService:
                 name=dashboard.name,
                 description=dashboard.description,
                 scope=dashboard.scope,
-                endpoints=[DashboardEndpoint(id=e.endpoint.id,
-                                             name=e.endpoint.name,
-                                             url=e.endpoint.url,
-                                             status=e.endpoint.status.status,
-                                             unit=e.unit,
-                                             type=e.type,
-                                             duration=e.duration,
-                                             x=e.x, y=e.y, w=e.w, h=e.h, i=e.i)
+                endpoints=[DashboardEndpointLight(name=e.endpoint.name,
+                                                  status=e.endpoint.status.status)
                            for e in dashboard.endpoints]
             )
             for dashboard in dashboards

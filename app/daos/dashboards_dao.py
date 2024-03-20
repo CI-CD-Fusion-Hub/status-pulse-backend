@@ -3,7 +3,7 @@ from typing import List
 from psycopg2 import errorcodes
 from sqlalchemy import select, update, delete
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import selectinload, Session
+from sqlalchemy.orm import selectinload, Session, joinedload
 
 from app.models import db_models as model
 from app.schemas.dashboards_sch import CreateDashboard, DashboardEndpointCreate, DashboardEndpoint
@@ -32,11 +32,14 @@ class DashboardDAO:
         """Fetch all dashboards by ids."""
         async with self.db:
             result = await self.db.execute(select(model.Dashboards)
-                                           .options(selectinload(model.Dashboards.endpoints)
-                                                    .selectinload(model.DashboardEndpoints.endpoint))
+                                           .options(
+                                                joinedload(model.Dashboards.endpoints)
+                                                .joinedload(model.DashboardEndpoints.endpoint))
                                            .where(model.Dashboards.id.in_(ids))
                                            .order_by(model.Dashboards.created_at))
-            return result.scalars().all()
+            unique_result = result.unique().scalars().all()
+
+            return unique_result
 
     async def get_by_id(self, dashboard_id: int) -> model.Dashboards:
         """Fetch a specific dashboard by ID."""

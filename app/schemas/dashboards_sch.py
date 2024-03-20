@@ -155,6 +155,11 @@ class DashboardEndpoint(BaseModel):
         return duration
 
 
+class DashboardEndpointLight(BaseModel):
+    name: str
+    status: str
+
+
 # Response models
 class DashboardOut(BaseModel):
     id: int
@@ -162,7 +167,7 @@ class DashboardOut(BaseModel):
     name: str
     description: str
     scope: str
-    endpoints: List[DashboardEndpoint] = []
+    endpoints: List[DashboardEndpointLight] = []
 
 
 
