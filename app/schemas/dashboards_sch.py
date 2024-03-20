@@ -160,6 +160,15 @@ class DashboardEndpointLight(BaseModel):
     status: str
 
 
+class DashboardOutLight(BaseModel):
+    id: int
+    uuid: str
+    name: str
+    description: str
+    scope: str
+    endpoints: List[DashboardEndpointLight] = []
+
+
 # Response models
 class DashboardOut(BaseModel):
     id: int
@@ -167,7 +176,7 @@ class DashboardOut(BaseModel):
     name: str
     description: str
     scope: str
-    endpoints: List[DashboardEndpointLight] = []
+    endpoints: List[DashboardEndpoint] = []
 
 
 

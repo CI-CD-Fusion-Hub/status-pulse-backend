@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Request, Query
 from sqlalchemy.orm import Session
 
 from app.schemas.dashboards_sch import DashboardOut, CreateDashboard, UpdateDashboard, DashboardEndpoint, \
-    DashboardEndpointCreate
+    DashboardEndpointCreate, DashboardOutLight
 from app.schemas.response_sch import Response
 from app.services.dashboards_srv import DashboardService
 from app.utils.check_session import auth_required
@@ -20,7 +20,7 @@ def create_dashboard_service(db: Session = Depends(get_db)):
 @router.get("/dashboards", tags=["dashboards"])
 @auth_required
 async def get_all(request: Request, dashboard_service: DashboardService = Depends(create_dashboard_service)) \
-        -> List[DashboardOut]:
+        -> List[DashboardOutLight]:
     return await dashboard_service.get_all(request)
 
 
