@@ -38,7 +38,7 @@ class UserDAO:
             result = await self.db.execute(select(model.Users).where(model.Users.email == email))
             return result.scalars().first()
 
-    async def get_detailed_user_info_by_email(self, email: str) -> model.Notifications:
+    async def get_detailed_user_info_by_email(self, email: str) -> model.Users:
         """Fetch a user with their endpoints access."""
         async with self.db:
             stmt = (

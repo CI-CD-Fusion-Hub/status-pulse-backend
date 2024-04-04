@@ -1,19 +1,16 @@
 import uuid
-from datetime import timezone, datetime, timedelta
 from typing import List
 
 from fastapi import status, Request
 from sqlalchemy.orm import Session
 
 from app.daos.dashboards_dao import DashboardDAO, DashboardError
-from app.daos.log_table_dao import LogTableDAO
 from app.exceptions.custom_http_expeption import CustomHTTPException
 from app.models import db_models as model
 from app.schemas.dashboards_sch import DashboardOut, DashboardEndpoint, CreateDashboard, UpdateDashboard, \
     DashboardEndpointCreate, DashboardEndpointLight, DashboardOutLight
-from app.schemas.endpoints_sch import EndpointLogs, BaseEndpointLogs
 from app.utils.chart_processor import ChartProcessor
-from app.utils.enums import SessionAttributes, DashboardScopes, DashboardChartTypes, EndpointStatus
+from app.utils.enums import SessionAttributes, DashboardScopes, AccessLevel
 from app.utils.logger import Logger
 from app.utils.response import ok, error
 
@@ -37,6 +34,11 @@ class DashboardService:
             LOGGER.warning(f"User does not have access to dashboard with ID {dashboard_id}.")
             raise CustomHTTPException(detail=f"Dashboard with ID {dashboard_id} does not exist.",
                                       status_code=status.HTTP_400_BAD_REQUEST)
+
+    @classmethod
+    def _is_admin(cls, request: Request):
+        user_access_level = request.session.get(SessionAttributes.USER_ACCESS_LEVEL.value)
+        return False if user_access_level != AccessLevel.ADMIN.value else True
 
     async def _get_dashboard(self, dashboard_id: int):
         dashboard = await self.dashboards_dao.get_by_id(dashboard_id)
@@ -166,8 +168,8 @@ class DashboardService:
         user_endpoints = request.session.get(SessionAttributes.USER_ENDPOINTS_PERM.value)
 
         for endpoint in endpoints_order:
-            if endpoint.id not in user_endpoints.keys():
-                raise CustomHTTPException(detail=f"Dashboard have been created but but "
+            if endpoint.id not in user_endpoints.keys() and not self._is_admin(request):
+                raise CustomHTTPException(detail=f"Dashboard cannot be updated, because "
                                                  f"endpoint with id {endpoint.id} does not exist.",
                                           status_code=status.HTTP_404_NOT_FOUND)
 
